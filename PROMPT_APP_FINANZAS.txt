@@ -1,0 +1,729 @@
+Quiero que desarrolles una aplicación móvil Android de finanzas personales usando el CAMINO A: Expo + React Native + TypeScript.
+
+IMPORTANTE:
+- Mi máquina ya tiene Node.js v24.11.0.
+- NO tengo Java, Android SDK, Flutter ni Android Studio.
+- Quiero usar Expo Go para probar la app en mi teléfono desde hoy.
+- No quiero Kotlin ni Flutter en esta fase.
+- No quiero backend en la primera versión.
+- Toda la información debe almacenarse localmente en el dispositivo.
+- La app debe quedar diseñada para poder migrar posteriormente a SQLite/Cloud/Firebase sin rehacer toda la arquitectura.
+- Idioma de toda la interfaz: español.
+- Moneda principal: MXN.
+- Diseño: limpio, moderno, sobrio, estilo dashboard financiero.
+- Usar TypeScript.
+- Priorizar componentes reutilizables y arquitectura mantenible.
+- Android mínimo conceptual: Android 8 / API 26, aunque Expo gestione la compatibilidad.
+
+NOMBRE PROVISIONAL:
+"Mi Control Financiero"
+
+OBJETIVO:
+Crear una aplicación personal para administrar mis finanzas reales día a día, reemplazando gradualmente mi Excel. Debe ayudarme a saber:
+1. cuánto dinero tengo,
+2. cuánto de ese dinero ya está comprometido,
+3. cuánto puedo gastar realmente,
+4. cuánto debo en tarjetas,
+5. cuánto tengo en apartados,
+6. cuánto gasto en renta, agua, luz, gas, internet, teléfono, comida, transporte, suscripciones, moto, hogar y diversión,
+7. cuánto ahorro,
+8. cuánto crece o disminuye mi patrimonio,
+9. cómo voy respecto a mis metas financieras.
+
+PRINCIPIO CENTRAL DE LA APP:
+"Saldo bancario NO es igual a dinero libre".
+
+La app debe calcular:
+dinero libre real =
+saldo disponible
+- dinero comprometido para TDC
+- gastos esenciales pendientes
+- provisiones próximas
+- metas/apartados protegidos que no deben tocarse.
+
+ARQUITECTURA DE DATOS
+
+Crear modelos/interfaces para:
+
+1. Account
+- id
+- name
+- institution
+- type: debit | credit | cash | savings
+- balance
+- creditLimit opcional
+- availableCredit opcional
+- active
+- notes
+
+2. Transaction
+- id
+- date
+- description
+- amount
+- type: expense | income | transfer | creditPayment
+- categoryId
+- paymentMethod
+- accountId
+- fundId opcional
+- merchant opcional
+- isCreditCardPurchase boolean
+- isPending boolean
+- notes
+- createdAt
+- updatedAt
+
+3. Category
+- id
+- name
+- group:
+  - Necesidad
+  - Deseo
+  - Ahorro/Inversión
+  - Deuda/Pago
+  - Ingreso
+
+Categorías iniciales:
+- Renta
+- Agua
+- Luz
+- Gas
+- Internet
+- Teléfono
+- Suscripciones
+- Despensa
+- Comida fuera
+- Gasolina
+- Moto mantenimiento
+- Moto seguro
+- Moto trámites
+- Hogar
+- Equipar depa
+- Diversión
+- Viajes
+- Salud
+- TDC pago
+- Ahorro
+- Inversión
+- Otros
+
+4. Fund / Apartado
+- id
+- name
+- currentAmount
+- targetAmount opcional
+- purpose
+- protected boolean
+- active
+
+5. CreditCard
+- id
+- name
+- bank
+- creditLimit
+- currentBalance
+- cutDay
+- dueDate
+- currentNoInterestPayment
+- availableCredit
+- points
+- active
+
+6. InstallmentPurchase
+- id
+- cardId
+- description
+- originalAmount
+- pendingBalance
+- monthlyPayment
+- totalMonths
+- currentPaymentNumber
+- interestRate
+- startDate
+- active
+
+7. Service
+- id
+- name
+- expectedMonthlyAmount
+- lastAmount
+- dueDay opcional
+- categoryId
+- active
+- notes
+
+8. Goal
+- id
+- name
+- targetAmount
+- currentAmount
+- priority
+- type:
+  - emergencia
+  - provisión
+  - compra
+  - inversión
+  - otro
+- deadline opcional
+- active
+
+9. Budget
+- month
+- categoryId
+- plannedAmount
+- actualAmount calculado
+- variance calculada
+
+10. Asset
+- id
+- name
+- estimatedValue
+- type
+- notes
+
+11. Liability
+- id
+- name
+- outstandingBalance
+- interestRate
+- monthlyPayment
+- type
+- notes
+
+12. FinancialSnapshot
+- date
+- cashAndAccounts
+- protectedFunds
+- creditCardDebt
+- installmentDebt
+- assets
+- liabilities
+- netWorth
+
+PERSISTENCIA
+
+Para v1:
+- usar almacenamiento local.
+- Preferencia: expo-sqlite.
+- Si por alguna razón el template inicial hace más rápido AsyncStorage, se puede usar temporalmente, pero crear un repository/service layer para que después podamos cambiar a SQLite sin reescribir pantallas.
+- Crear datos seed iniciales con mi información real.
+
+DATOS INICIALES / SEED
+
+CUENTA BBVA NÓMINA
+- nombre: Nómina BBVA
+- tipo: debit
+- saldo conocido más reciente: 12074.73 MXN
+- fecha de referencia: 25 agosto 2026
+
+APARTADOS BBVA ACTUALES
+Total: 16401 MXN
+- Renta: 2500
+- Fondo de emergencia: 4000
+- Servicios: 1500
+- Mensualidades: 2000
+- Equip depa: 6401
+- Pagos TDC: 0
+
+FONDO DE EMERGENCIA
+- meta inicial de referencia: 39000 MXN
+- saldo actual: 4000 MXN
+- prioridad: alta
+
+TARJETA BBVA AZUL
+- línea de crédito: 111700 MXN
+- saldo utilizado observado después del pago: 20000.50 MXN
+- fecha de corte: día 12
+- fecha límite del último estado: 1 septiembre 2026
+- pago para no generar intereses del corte 12-ago-2026: 8644.18 MXN
+- ese pago YA FUE LIQUIDADO el 25 agosto 2026
+- pago actual del corte anterior: 0
+- puntos BBVA observados: 268
+- tasa variable mostrada en el estado: 66.30% anual
+- intereses pagados en últimos 12 meses en ese estado: 0
+
+COMPRAS A MSI ACTIVAS
+
+1. Emma Sleep
+- monto original: 4025.33
+- mensualidad: 336
+- 12 MSI
+- en el estado del 12-ago aparecía pago 2 de 12
+- tasa 0%
+
+2. Refrigerador Walmart
+- monto original: 7529.80
+- mensualidad: 628
+- 12 MSI
+- en el estado del 12-ago aparecía pago 1 de 12
+- tasa 0%
+
+3. Lavasecadora LG WD12VVC4S6S
+- monto original: 9314.19
+- mensualidad: 518
+- 18 MSI
+- en el estado del 12-ago aparecía pago 1 de 18
+- tasa 0%
+
+Mensualidades conocidas combinadas:
+336 + 628 + 518 = 1482 MXN por mes.
+
+NOTA IMPORTANTE:
+El saldo total de la tarjeta NO debe confundirse con el pago requerido del siguiente corte porque parte pertenece a MSI futuros.
+
+ÚLTIMO ESTADO DE CUENTA CONOCIDO
+Periodo: 13-jul-2026 a 12-ago-2026
+Corte: 12-ago-2026
+Pago para no generar intereses: 8644.18
+Pago mínimo + MSI: 2878.25
+Pago mínimo: 1396.25
+Saldo cargos regulares: 8644.18
+Saldo cargos a meses: 16637.86
+Saldo deudor total: 25282.04
+Ese pago de 8644.18 ya fue cubierto completamente.
+
+MOVIMIENTOS RECIENTES DEL CICLO POSTERIOR AL 12 DE AGOSTO
+
+Registrar inicialmente:
+- 14-ago-2026 OpenAI ChatGPT: 399.00
+- 15-ago-2026 Bodega Aurrera / Bae Tonalá: 747.55
+- 16-ago-2026 Railway: 85.53
+- 16-ago-2026 Airbnb México: 10.00
+- 16-ago-2026 Airbnb México: 10.00
+- 17-ago-2026 Carnicería Don Chava: 296.27
+- 19-ago-2026 Servicio / KiwiBon Serv Jesús: 550.00
+- 20-ago-2026 Gasolina Petro7: 284.10
+- 20-ago-2026 Totalplay: 400.00
+- 23-ago-2026 Super abarrotes: 395.00
+
+Compras nuevas aproximadas conocidas después del corte:
+3177.45 MXN
+
+Proyección simple conocida para el próximo pago:
+compras nuevas 3177.45
++ MSI estimados 1482
+= 4659.45 MXN
+Esta proyección debe ser DINÁMICA en la app y recalcularse con los nuevos movimientos.
+
+SERVICIOS
+
+Renta:
+- 5000 MXN al mes
+- estrategia actual: separar 2500 por quincena
+
+Agua:
+- último recibo real: 186 MXN
+- ya pagado
+- usar como referencia mensual inicial
+
+Internet Totalplay:
+- 400 MXN mensuales los primeros 6 meses
+- instalación inicial ya pagada anteriormente
+- se pagó adicional inicialmente por instalación/cableado, no tratar como mensualidad
+
+Telcel:
+Plan base Telcel Libre 4:
+- aproximadamente 499 MXN
+Equipo Motorola Edge 60:
+- aproximadamente 337.95 MXN mensuales
+Cashback observado:
+- aproximadamente -74.85 MXN
+Costo mensual real reciente:
+- alrededor de 763-778 MXN
+Usar presupuesto inicial de teléfono:
+- 780 MXN / mes
+
+Luz:
+- primer recibo observado: 73 MXN
+- todavía no asumir que será promedio definitivo
+
+Gas:
+- recibo anterior observado 321.43
+- incluía aproximadamente 220 de reconexión
+- consumo normal aproximado sin reconexión: 101.43
+
+SUSCRIPCIONES / SERVICIOS DIGITALES
+- ChatGPT: 399 MXN / mes aproximadamente
+- DeepSeek: alrededor de 184-187 MXN en movimientos previos
+- Railway: alrededor de 85-87 MXN
+- AWS ha tenido cargos variables anteriormente
+Permitir editar y activar/desactivar suscripciones.
+
+MOTO
+
+Tengo una KTM RC 200 modelo 2020:
+- un solo dueño
+- factura original
+- aproximadamente 80,000 km
+- llantas con aprox. 1 año de uso
+- servicio realizado hace unos 3 meses
+- se reparará y posteriormente se pondrá a venta
+
+Reparaciones / trámites recientes:
+- mano de obra reparación: 3000
+- pieza: 600
+- cambio de propietario de otra moto: 3470
+- 5000 de estos gastos fueron tomados del fondo de emergencia
+- suspensión pendiente: se pospuso para siguiente quincena
+
+Crear sección "Vehículos" opcional en v1 o dejar arquitectura preparada.
+
+Metas/provisiones aprendidas:
+- Seguro moto: ejemplo/meta de provisión 500 MXN mensuales
+- Servicio moto: ejemplo/meta de provisión 300 MXN mensuales
+
+PATRIMONIO
+
+La app debe calcular:
+Patrimonio neto = activos - pasivos.
+
+Debe existir una pantalla donde pueda registrar:
+- efectivo
+- cuentas
+- inversiones
+- valor estimado de motos/vehículos
+- deudas
+y ver la evolución histórica.
+
+REGLAS FINANCIERAS QUE DEBE IMPLEMENTAR LA APP
+
+1. Compra normal con TDC:
+Cada peso gastado con TDC debería quedar respaldado por un peso de efectivo.
+
+Ejemplo:
+si compro 600 con tarjeta y tenía 1000 libres,
+mi dinero libre real baja a 400 aunque mi cuenta todavía muestre 1000.
+
+2. Crear lógica para "Monto a respaldar TDC".
+Debe sumar las compras del ciclo actual que aún no estén cubiertas por un pago/apartado.
+
+3. MSI:
+No exigir que exista todo el monto original en efectivo.
+Pero mostrar:
+- mensualidad total comprometida,
+- número de MSI activos,
+- saldo pendiente,
+- porcentaje de ingreso mensual comprometido por MSI.
+
+4. Mostrar advertencia si las mensualidades reducen demasiado el margen mensual.
+
+5. Fondo de emergencia:
+- no contar como dinero libre
+- meta configurable
+- mostrar cobertura en meses:
+fondo actual / gastos esenciales mensuales
+
+6. Provisiones:
+Permitir crear gastos previsibles, por ejemplo:
+- seguro moto anual
+- servicio moto semestral
+- mantenimiento
+- renovaciones
+y calcular automáticamente cuánto debo separar por mes.
+
+7. Gasto libre:
+Debe calcularse después de:
+- obligaciones
+- necesidades
+- provisiones
+- respaldo de TDC
+- ahorro/meta definida
+
+8. Separar conceptualmente:
+- gasto
+- ahorro
+- provisión
+- inversión
+- transferencia
+- pago de deuda
+
+9. La app debe distinguir:
+"ahorro para consumo futuro", como vacaciones,
+de "construcción de patrimonio", como inversión.
+
+PANTALLAS DE LA V1
+
+1. Inicio / Dashboard
+
+Mostrar tarjetas KPI:
+- saldo disponible
+- total apartados
+- dinero protegido
+- gasto del mes
+- gasto libre real
+- deuda TDC actual
+- próximo pago TDC estimado
+- MSI mensuales
+- fondo de emergencia
+- porcentaje de avance de emergencia
+- patrimonio neto
+
+Mostrar alertas:
+- "Tienes X pesos gastados con TDC sin respaldar"
+- "Faltan X días para el corte"
+- "Faltan X días para fecha límite"
+- "Fondo de emergencia por debajo de la meta"
+- "Presupuesto de categoría excedido"
+
+2. Movimientos
+
+Lista filtrable por:
+- mes
+- categoría
+- cuenta
+- método
+- tipo
+
+Botón "+" para registrar:
+- gasto
+- ingreso
+- transferencia
+- pago TDC
+
+Formulario rápido:
+fecha
+descripción
+monto
+categoría
+método de pago
+cuenta
+si fue TDC
+si está pendiente
+notas
+
+3. Presupuesto
+
+Por mes:
+Categoría
+Presupuesto
+Gastado
+Disponible
+Porcentaje usado
+
+Semáforo:
+- verde < 75%
+- amarillo 75-100%
+- rojo >100%
+
+4. Servicios
+
+Tarjetas:
+- renta
+- agua
+- luz
+- gas
+- internet
+- teléfono
+- suscripciones
+
+Mostrar:
+último pago
+promedio
+presupuesto
+variación
+historial
+
+5. Tarjeta BBVA / Deudas
+
+Mostrar:
+- línea
+- saldo utilizado
+- crédito disponible
+- fecha de corte
+- fecha límite
+- compras regulares del ciclo
+- MSI del próximo periodo
+- pago proyectado
+- puntos
+
+Subsección MSI:
+tabla/listado con cada compra.
+
+6. Apartados
+
+Mostrar:
+- renta
+- emergencia
+- servicios
+- mensualidades
+- equip depa
+- pagos TDC
+
+Permitir:
+- ingresar / retirar
+- registrar propósito
+- proteger apartado
+
+7. Metas
+
+Ejemplos iniciales:
+- Fondo de emergencia: 39000, actual 4000
+- Seguro moto: 6000
+- Servicio moto: 3600 anual como referencia
+- Inversión largo plazo
+- otras metas editables
+
+Mostrar progreso.
+
+8. Patrimonio
+
+Mostrar:
+- activos
+- pasivos
+- patrimonio neto
+- evolución mensual
+
+9. Reportes
+
+Por mes:
+- ingreso
+- gasto total
+- necesidades
+- deseos
+- deuda
+- ahorro
+- inversión
+- tasa de ahorro
+- construcción de patrimonio
+
+Gráficas:
+- gasto por categoría
+- gasto mensual
+- servicios mes a mes
+- evolución patrimonio
+- evolución fondo emergencia
+
+10. Configuración
+
+Permitir:
+- editar categorías
+- editar cuentas
+- fecha de corte TDC
+- metas
+- moneda
+- exportar datos
+
+FUNCIONES IMPORTANTES
+
+- poder editar y borrar movimientos
+- confirmar antes de borrar
+- persistencia local
+- filtros por fecha
+- búsqueda por descripción
+- formatos MXN
+- fechas locales México
+- modo oscuro preferentemente compatible con sistema
+- componentes accesibles
+- manejar teclado móvil correctamente
+- estados vacíos
+- mensajes de error claros
+
+IMPORTACIÓN / EXPORTACIÓN
+
+Preparar una pantalla futura y arquitectura para:
+- importar CSV
+- exportar CSV
+- respaldo JSON
+
+En v1 sí implementar al menos:
+- exportar movimientos a JSON o CSV si Expo lo permite fácilmente.
+
+NO INCLUIR EN V1
+
+- conexión bancaria automática
+- scraping de BBVA
+- manejo de credenciales bancarias
+- pagos desde la app
+- Open Banking
+- login multiusuario
+- nube obligatoria
+- inversiones automáticas
+- IA integrada
+- OCR de tickets
+- sincronización bancaria
+- publicación Play Store
+
+SEGURIDAD
+
+- Nunca almacenar contraseñas bancarias.
+- Nunca pedir NIP, CVV o token.
+- Los números completos de tarjeta no son necesarios.
+- Mostrar únicamente últimos 4 dígitos.
+- Los datos financieros se quedan localmente en v1.
+
+ESTRUCTURA TÉCNICA DESEADA
+
+src/
+  components/
+  screens/
+  navigation/
+  models/
+  repositories/
+  services/
+  utils/
+  hooks/
+  constants/
+  theme/
+  database/
+  seed/
+
+Usar:
+- Expo
+- React Native
+- TypeScript
+- React Navigation o Expo Router, elige la opción que mejor encaje con create-expo-app actual
+- expo-sqlite si es estable y adecuado
+- librería de gráficas compatible con Expo Go solo si no rompe el arranque; si complica el MVP, crear componentes simples y dejar gráficas para segunda iteración
+
+ENTREGABLE DE ESTA EJECUCIÓN
+
+NO me des solamente instrucciones.
+
+Quiero que TRABAJES EN EL PROYECTO:
+
+1. Verifica el directorio actual.
+2. Si todavía no existe proyecto Expo, inicialízalo con una configuración compatible con Expo Go.
+3. Instala dependencias necesarias.
+4. Crea la estructura del proyecto.
+5. Implementa los modelos.
+6. Implementa almacenamiento local.
+7. Inserta los datos seed indicados arriba.
+8. Construye navegación.
+9. Construye primero estas pantallas funcionales:
+   - Dashboard
+   - Movimientos
+   - Nuevo movimiento
+   - TDC/MSI
+   - Apartados
+   - Servicios
+   - Metas
+10. Añade edición básica.
+11. Asegúrate de que npm start funciona.
+12. Corrige errores de TypeScript y runtime.
+13. Déjame instrucciones exactas y MUY CORTAS para abrir Expo Go y escanear el QR.
+14. Al final dame:
+   - archivos creados
+   - arquitectura
+   - decisiones importantes
+   - pendientes para v2
+
+FORMA DE TRABAJAR
+
+- No me preguntes por decisiones pequeñas: toma decisiones razonables.
+- Si hay una ambigüedad, prioriza simplicidad y posibilidad de cambiar después.
+- No sobreingenierizar.
+- Primero quiero una versión funcional en el teléfono.
+- Trabaja por etapas, pero continúa hasta tener un MVP ejecutable.
+- Antes de terminar, ejecuta typecheck/lint si el proyecto lo permite.
+- No reemplaces todo con pseudocódigo.
+- Escribe archivos reales.
+- Si una librería da problemas con Expo Go, reemplázala por una alternativa compatible.
+- Documenta brevemente las partes importantes.
+
+CRITERIO DE ÉXITO
+
+Al ejecutar:
+
+npm start
+
+debo poder abrir Expo Go en Android, escanear el QR y ver una app funcional donde ya aparezcan mis datos financieros iniciales, pueda registrar un nuevo gasto y el Dashboard se actualice.

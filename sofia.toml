@@ -1,0 +1,26 @@
+# sofia.toml - configuración por proyecto de sofIA
+# Generada con: sofia init
+
+[context]
+# Términos propios del dominio que se suman a la búsqueda de evidencia.
+# Ejemplo para un sistema de facturación: ["facturacion", "cfdi", "sat"]
+search_terms = []
+# Presupuesto de evidencia (opcional):
+# max_files = 25
+# max_matches = 40
+# max_line_length = 120
+# context_lines = 1  # líneas de contexto alrededor de cada coincidencia (0 desactiva)
+
+[defaults]
+# Modo por defecto cuando no se pasa --mode:
+# plan, agent, yolo, tutor, opinion, prompter, experto
+# mode = "plan"
+
+# Modelo, skills y límites por modo (opcional):
+# [mode.plan]
+# model = "deepseek-v4-flash"
+# skills = ["systematic-debugging"]
+# max_turns = 12
+
+# [mode.tutor]
+# model = "deepseek-v4-flash"
