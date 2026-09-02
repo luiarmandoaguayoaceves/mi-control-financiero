@@ -1,14 +1,18 @@
 // ============================================================
-// Repositorio de datos: única puerta de escritura sobre localStorage.
-// Las pantallas nunca tocan localStorage directo. Aislado para poder
-// migrar a IndexedDB/SQLite/Cloud sin reescribir las pantallas.
+// Repositorio de datos: única puerta de escritura.
+// Estrategia (sin backend, apta para Netlify):
+//   1. data/app-data.json  -> JSON base versionado EN EL PROYECTO
+//      (la app lo lee con fetch en el primer arranque)
+//   2. localStorage        -> tus cambios en runtime (persistencia real)
+//   3. src/seed.js         -> respaldo si no existe el archivo
+// La pantalla Configuración exporta/importa JSON para mover datos
+// entre el navegador y data/app-data.json.
 // ============================================================
 import { STORAGE_KEY, APP_DATA_VERSION } from './models.js';
 import { buildSeedData } from './seed.js';
 import { todayISO, toMonthKey, round2 } from './format.js';
 import { availableBalance, protectedFundsTotal, totalCardDebt, msiPendingTotal, buildSnapshot } from './finance.js';
 
-const SEED_FLAG_KEY = 'mcf_seeded_v1';
 const listeners = new Set();
 let cache = null;
 
@@ -37,25 +41,46 @@ function persist(data) {
   notify(data);
 }
 
-/** Carga los datos (sembrando la primera vez). Devuelve AppData. */
+/**
+ * Carga síncrona: localStorage (tus cambios) o, si está vacío,
+ * el seed en memoria (aún sin persistir: bootstrap decide si la
+ * base es data/app-data.json o el seed).
+ */
 export function load() {
   if (cache) return cache;
   try {
-    const seeded = localStorage.getItem(SEED_FLAG_KEY);
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       cache = JSON.parse(raw);
-      if (seeded !== '1') localStorage.setItem(SEED_FLAG_KEY, '1');
       return cache;
     }
   } catch (e) {
     console.warn('Datos locales corruptos, se re-sembrará', e);
   }
-  const seed = buildSeedData();
-  localStorage.setItem(SEED_FLAG_KEY, '1');
-  persist(seed);
-  cache = seed;
-  return seed;
+  cache = buildSeedData();
+  return cache;
+}
+
+/**
+ * Primer arranque: si no hay datos locales, intenta leer el JSON del
+ * proyecto (data/app-data.json). Si no existe, usa el seed.
+ * Se llama una sola vez desde app.js.
+ */
+export async function bootstrapFromFile() {
+  if (localStorage.getItem(STORAGE_KEY)) return; // ya hay datos locales
+  try {
+    const res = await fetch('data/app-data.json', { cache: 'no-store' });
+    if (res.ok) {
+      const parsed = await res.json();
+      if (parsed && Array.isArray(parsed.transactions)) {
+        persist({ ...parsed, version: APP_DATA_VERSION });
+        return;
+      }
+    }
+  } catch (e) {
+    // Sin archivo o sin red: usa el seed
+  }
+  persist(cache || buildSeedData());
 }
 
 function get() {

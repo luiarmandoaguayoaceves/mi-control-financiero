@@ -11,7 +11,7 @@ globalThis.localStorage = {
   removeItem: (k) => mem.delete(k),
 };
 
-const { load, addTransaction, deleteTransaction, getData, fundMovement } = await import('../src/store.js');
+const { load, addTransaction, deleteTransaction, getData, fundMovement, bootstrapFromFile } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
 store.data = load();
 
@@ -28,6 +28,14 @@ const { renderSettings } = await import('../src/screens/settings.js');
 const { renderMore } = await import('../src/screens/more.js');
 const { renderModal } = await import('../src/screens/modals.js');
 const { state } = await import('../src/screens/appState.js');
+
+test('bootstrap: sin datos locales y sin archivo, persiste el seed', async () => {
+  // fetch relativo no existe en Node -> cae al seed y lo persiste en localStorage
+  await bootstrapFromFile();
+  const raw = mem.get('mcf_app_data_v1');
+  assert.ok(raw, 'debe persistir datos en localStorage');
+  assert.ok(JSON.parse(raw).transactions.length === 10, 'debe ser el seed (10 movimientos)');
+});
 
 test('dashboard renderiza el saldo real del seed', () => {
   const html = renderDashboard();

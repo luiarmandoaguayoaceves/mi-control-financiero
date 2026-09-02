@@ -5,16 +5,15 @@
 Quiero que desarrolles una aplicación móvil para Android de finanzas personales usando el CAMINO WEB: **HTML5 + Tailwind CSS + JavaScript (vanilla, SIN framework)**.
 
 IMPORTANTE:
-- Mi máquina tiene Node.js v24.11.0, pero la app NO debe requerir Node para ejecutarse: al final debe ser una carpeta de archivos estáticos (HTML + CSS compilado + JS) que se abre en cualquier navegador y se envuelve en APK después con Capacitor.
-- NO tengo Java, Android SDK, Flutter ni Android Studio.
-- No quiero React, React Native, Vue, Angular ni TypeScript en esta fase. JavaScript puro con ES Modules.
-- No quiero backend en la primera versión. Nada de servidores, cuentas ni nube.
-- Toda la información se almacena LOCALMENTE en el dispositivo en formato JSON usando `localStorage` (llave única tipo `mcf_app_data_v1`).
-- La app debe quedar diseñada para migrar después a IndexedDB/SQLite/Cloud sin rehacer las pantallas: capa `store.js` (repositorio) que aísle el acceso a datos.
+- Mi máquina tiene Node.js v24.11.0, pero la app NO debe requerir backend: al final debe ser una carpeta de archivos estáticos (HTML + CSS compilado + JS) que se sube a Netlify.
+- NO quiero React, React Native, Vue, Angular ni TypeScript en esta fase. JavaScript puro con ES Modules.
+- No quiero backend ni servidores propios. La app se publica en Netlify (hosting estático).
+- Los datos se almacenan como JSON en el mismo proyecto: un archivo base `data/app-data.json` (versionado, se lee con fetch en el primer arranque) + tus cambios en `localStorage` del navegador (única forma de persistir en un sitio estático). El flujo: usa la app → Configuración → Exportar respaldo JSON → reemplaza `data/app-data.json` → commit → Netlify se redespliega.
+- La app debe quedar diseñada para migrar después a IndexedDB/Cloud sin rehacer las pantallas: capa `store.js` (repositorio) que aísle el acceso a datos.
 - Idioma de toda la interfaz: español. Moneda principal: MXN. Fechas locales de México (es-MX).
 - Diseño: limpio, moderno, sobrio, estilo dashboard financiero. Modo oscuro compatible con el sistema (clase `.dark` en `<html>`, preferencia guardada en localStorage, default = seguir al sistema).
-- Tailwind CSS COMPILADO en `css/tailwind.css` (sin CDN: la app debe funcionar offline en el APK).
-- Estructura pensada para envolver con Capacitor → APK instalable, sin depender de servidores.
+- Tailwind CSS COMPILADO en `css/tailwind.css` (sin CDN: funciona offline y en Netlify sin pasos extra).
+- Estructura pensada para publicarse estática en Netlify (sin build): `netlify.toml` con `publish = "."`.
 
 NOMBRE PROVISIONAL:
 "Mi Control Financiero"
@@ -60,10 +59,11 @@ Crear los mismos modelos (como objetos/constantes en `src/models.js`):
 12. FinancialSnapshot: date, cashAndAccounts, protectedFunds, creditCardDebt, installmentDebt, assets, liabilities, netWorth
 
 PERSISTENCIA (v1)
-- `localStorage` en formato JSON, llave única. Un solo blob `{version, accounts, transactions, categories, funds, creditCards, installmentPurchases, services, goals, budgets, assets, liabilities, snapshots, settings}`.
-- Capa `src/store.js`: ÚNICA puerta de escritura (load/save/subscribe + acciones CRUD). Las pantallas jamás tocan localStorage directo.
+- JSON en el mismo proyecto: `data/app-data.json` como base versionada (la app lo lee con `fetch('data/app-data.json')` en el primer arranque; si no existe, usa `src/seed.js`).
+- `localStorage` (llave `mcf_app_data_v1`) como persistencia real en runtime: única forma de guardar en un hosting estático como Netlify.
+- Capa `src/store.js`: ÚNICA puerta de escritura (load/bootstrap/persist + acciones CRUD + efecto contable). Las pantallas jamás tocan localStorage directo.
 - Lógica financiera pura en `src/finance.js` (sin tocar el DOM): funciones puras, probadas con `node --test` en `tests/`.
-- Datos seed en `src/seed.js` con mi información real (abajo).
+- Datos seed en `src/seed.js` con mi información real (abajo); comando `npm run data` regenera `data/app-data.json` desde el seed.
 
 DATOS INICIALES / SEED (idénticos a mi información real)
 
@@ -151,45 +151,48 @@ ESTRUCTURA TÉCNICA DESEADA
 
 mi-control-financiero/
   index.html
-  css/tailwind.css          # Tailwind COMPILADO (no CDN)
+  netlify.toml             # publish = "." (sin build)
+  data/app-data.json       # JSON base de datos del proyecto (versionado)
+  css/tailwind.css         # Tailwind COMPILADO (no CDN)
   src/
-    input.css               # fuente Tailwind v4 (@import "tailwindcss"; @custom-variant dark...)
-    models.js               # modelos y constantes
-    format.js               # dinero MXN, fechas es-MX (puro)
-    finance.js              # lógica financiera PURA (testeada)
-    seed.js                 # datos iniciales reales
-    store.js                # repositorio localStorage + acciones + efecto contable
-    ui.js                   # helpers de render (KPI, progress, bar, chip, modal, empty, alert)
-    screens/                # dashboard, movements, newMovement, card, funds, services, goals, budget, assets, reports, settings, more
-    app.js                  # arranque, router de hash, pestañas, tema oscuro
-  tests/                    # node --test (lógica financiera + seed)
+    input.css              # fuente Tailwind v4 (@import "tailwindcss"; @custom-variant dark...)
+    models.js              # modelos y constantes
+    format.js              # dinero MXN, fechas es-MX (puro)
+    finance.js             # lógica financiera PURA (testeada)
+    seed.js                # datos iniciales reales
+    store.js               # repositorio: app-data.json → localStorage → seed
+    ui.js                  # helpers de render (KPI, progress, bar, chip, modal, empty, alert)
+    screens/               # dashboard, movements, newMovement, card, funds, services, goals, budget, assets, reports, settings, more
+    app.js                 # arranque, router de hash, pestañas, tema oscuro
+  tests/                   # node --test (lógica financiera + seed + smoke)
   README.md
 
 Herramientas:
-- Tailwind CSS v4 compilado con `@tailwindcss/cli`: `npx @tailwindcss/cli -i src/input.css -o css/tailwind.css --minify`
+- Tailwind CSS v4 compilado con `@tailwindcss/cli`: `npm run css`.
 - JavaScript puro con ES Modules. Sin framework, sin bundler, sin CDN en runtime.
 - Tests: `node --test "tests/*.test.js"` (Node ejecuta JS directamente, sin dependencias).
-- Servir para desarrollo: `python3 -m http.server 8080` (o cualquier servidor estático). La carpeta final es 100% estática.
+- Servir para desarrollo: `npm start` (usa `npx serve -l 8080 .`).
+- Publicar: Netlify (arrastrar carpeta o conectar repo; `netlify.toml` ya define publish = ".").
 
 ENTREGABLE DE ESTA EJECUCIÓN
 
 NO me des solamente instrucciones. TRABAJA EN EL PROYECTO:
 1. Borra cualquier proyecto anterior en el directorio y crea la estructura nueva.
 2. Implementa models.js, format.js, finance.js (con tests primero: node --test, RED → GREEN), seed.js, store.js.
-3. Inserta los datos seed con mi información real.
+3. Inserta los datos seed con mi información real y genera `data/app-data.json` (npm run data).
 4. Construye las 11 pantallas funcionales + navegación de pestañas.
 5. Compila Tailwind a css/tailwind.css (sin CDN).
-6. Edición y borrado de movimientos, exportar/importar JSON.
+6. Edición y borrado de movimientos, exportar/importar JSON (exportar reemplaza data/app-data.json para versionar tus datos).
 7. Modo oscuro siguiendo al sistema + toggle manual.
 8. Verifica: `node --test` pasa, la app abre en navegador (dashboard con mis datos), registrar un gasto actualiza el Dashboard, no hay errores de consola.
-9. Al final dame: archivos creados, arquitectura, decisiones importantes, pendientes para v2 (migrar a IndexedDB, wrap APK con Capacitor, notificaciones, etc.).
+9. Al final dame: archivos creados, arquitectura, decisiones importantes, pendientes para v2 (migrar a IndexedDB, CSV, notificaciones, PWA, etc.).
 
 FORMA DE TRABAJAR
 - No preguntes por decisiones pequeñas: toma decisiones razonables. Prioriza simplicidad y posibilidad de cambiar después. No sobreingenierizar.
-- Primero quiero una versión funcional en el teléfono (navegador del celular en la misma red, o APK con Capacitor después).
+- Primero quiero una versión funcional: navegador de mi PC y del celular en la misma red, y publicada en Netlify.
 - Trabaja por etapas hasta tener el MVP ejecutable. Escribe archivos reales, no pseudocódigo.
 - Si una librería da problemas, reemplázala por alternativa compatible o código propio simple.
 - Documenta brevemente las partes importantes en README.md.
 
 CRITERIO DE ÉXITO
-Al ejecutar `python3 -m http.server 8080` y abrir `http://localhost:8080` (o la IP de mi máquina desde el celular) veo una app funcional con mis datos financieros iniciales, puedo registrar un nuevo gasto y el Dashboard se actualiza al instante. La carpeta completa es estática y lista para envolver en APK con Capacitor sin backend.
+Al ejecutar `npm start` (npx serve) y abrir `http://localhost:8080` (o la IP de mi máquina desde el celular) veo una app funcional con mis datos financieros iniciales (leídos de `data/app-data.json`), puedo registrar un nuevo gasto y el Dashboard se actualiza al instante. La carpeta completa se sube a Netlify y funciona igual (los cambios quedan en localStorage del navegador y se versionan exportando el JSON a `data/app-data.json`).

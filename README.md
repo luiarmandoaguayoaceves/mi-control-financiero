@@ -1,7 +1,7 @@
 # Mi Control Financiero
 
 App personal de finanzas (v2, web estática) — **HTML + Tailwind CSS + JavaScript vanilla**.
-Cero backend, cero dependencias en runtime: los datos viven en el dispositivo como JSON (`localStorage`).
+Sin backend: se sube tal cual a **Netlify** y los datos se guardan como **JSON en el mismo proyecto**.
 
 Principio central: **"Saldo bancario NO es igual a dinero libre"**.
 
@@ -13,27 +13,50 @@ dinero libre real =
   − gastos esenciales pendientes (servicios con día de cobro próximo no cubiertos)
 ```
 
-## Correr
+## Correr (local)
 
 ```bash
-python3 -m http.server 8080      # o cualquier servidor estático
+npm start                  # usa npx serve -l 8080 .  (npx se descarga solo)
 # abrir http://localhost:8080  (desde el celular: http://<IP-de-tu-PC>:8080)
 ```
 
-No hace falta Node para ejecutarla: la carpeta es 100% estática.
+## Subir a Netlify
 
-## Comandos (solo para desarrollo)
+1. `npm run data` si cambiaste el seed (regenera `data/app-data.json`)
+2. Sube el proyecto a un repo de GitHub o arrastra la carpeta en https://app.netlify.com/drop
+3. Netlify detecta `netlify.toml` (publica la raíz, sin build). Listo.
+4. `node_modules/` no se publica (lo ignora Netlify); si arrastras la carpeta, puedes borrarla antes.
+
+## Cómo se guardan los datos (JSON en el proyecto, sin backend)
+
+| Capa | Qué es | Cuándo se usa |
+| --- | --- | --- |
+| `data/app-data.json` | JSON base versionado EN EL PROYECTO | Se lee en el primer arranque (fetch) y es la base que sube a Netlify |
+| `localStorage` | Tus cambios en el navegador | Persistencia real día a día (por eso funciona en Netlify: es 100% del lado del cliente) |
+| `src/seed.js` | Respaldo | Si no existe el archivo JSON |
+
+Flujo para "alimentar" el proyecto con tus datos:
+1. Usa la app normalmente (todo se guarda en tu navegador).
+2. Configuración → **Exportar respaldo JSON** → guarda el archivo como `data/app-data.json` (reemplazando el actual).
+3. `git commit` y Netlify se redespliega (o vuelve a arrastrar la carpeta).
+
+También puedes **editar `data/app-data.json` a mano** (es JSON legible) y recargar la app con datos locales borrados — al primer arranque tomará ese archivo como base. Si quieres regresar a la base del proyecto, Configuración → Restablecer y borra los datos del sitio en el navegador.
+
+## Comandos
 
 | Comando | Qué hace |
 | --- | --- |
-| `npm run css` | Recompila Tailwind v4 → `css/tailwind.css` |
-| `npm test` | 37 tests: lógica financiera, seed y smoke de todas las pantallas |
-| `npm start` | Servidor estático (python3) en el puerto 8080 |
+| `npm start` | Sirve la app con `npx serve` en http://localhost:8080 |
+| `npm test` | 38 tests: lógica financiera, seed, contabilidad y smoke de pantallas |
+| `npm run css` | Recompila Tailwind v4 → `css/tailwind.css` (tras cambiar clases) |
+| `npm run data` | Regenera `data/app-data.json` desde el seed |
 
 ## Estructura
 
 ```
 index.html
+netlify.toml              publish = "." (sin build)
+data/app-data.json        JSON base de datos del proyecto (versionado)
 css/tailwind.css          Tailwind COMPILADO (sin CDN, funciona offline)
 src/
   input.css               fuente Tailwind (@import + @custom-variant dark)
@@ -41,7 +64,7 @@ src/
   format.js               dinero MXN, fechas es-MX (puro)
   finance.js              lógica financiera PURA (testeada con node --test)
   seed.js                 datos iniciales reales (25-ago-2026)
-  store.js                repositorio localStorage + efecto contable
+  store.js                repositorio: app-data.json → localStorage → seed
   ui.js                   helpers de render (KPI, progress, chips, barras…)
   app.js                  arranque, router de hash, acciones, tema oscuro
   screens/                dashboard, movements, card, funds, services, goals,
@@ -51,14 +74,14 @@ tests/                    node --test (finance, seed, smoke)
 
 ## Decisiones importantes
 
-1. **localStorage (JSON) en v1** detrás de `store.js`: única puerta de escritura; migrar a IndexedDB/SQLite/Cloud es reemplazar ese módulo sin tocar pantallas.
+1. **JSON en el proyecto como base + localStorage como runtime**: única forma de que funcione en Netlify sin backend. `store.js` es la única puerta de escritura; migrar a IndexedDB o a un backend después no toca pantallas.
 2. **Saldos como verdad contable**: el seed se inserta ya conciliado; los movimientos NUEVOS ajustan saldos (gasto débito baja la cuenta, compra TDC sube la tarjeta, pago TDC baja ambas, ingreso a apartado sube el fondo).
 3. **Respaldo TDC = compras del ciclo posteriores al último pago**: con el seed, 3,177.45. Pago proyectado = respaldo + MSI del mes = **4,659.45** (dinámico).
 4. **MSI**: solo se respalda la mensualidad mensual, no el total. El saldo de la tarjeta (20,000.50) se muestra separado del pago requerido (parte es MSI futuro).
-5. **Tailwind compilado** (no CDN): la app funciona sin internet y queda lista para el APK.
+5. **Tailwind compilado** (no CDN): funciona offline y en Netlify sin pasos extra.
 6. **Modo oscuro** por clase `.dark` en `<html>`: sigue al sistema por defecto, con toggle manual (persistido).
-7. **Gráficas CSS puras** (sin librerías): cero fricción en el wrap a APK.
-8. **ES Modules**: requiere servirlo por HTTP (no `file://`).
+7. **Gráficas CSS puras** (sin librerías).
+8. **ES Modules**: requiere servirlo por HTTP (`npm start`), no `file://`.
 
 ## Números del seed (25-ago-2026)
 
@@ -75,25 +98,11 @@ tests/                    node --test (finance, seed, smoke)
 
 > El "dinero libre" sale negativo con los datos iniciales porque los apartados (16,401) superan el saldo (12,074.73): es la consecuencia honesta de la fórmula; se normaliza al registrar ingresos o ajustar saldos.
 
-## APK (siguiente paso)
-
-La carpeta ya es estática y apta para envolverse con **Capacitor** (HTML/JS → APK) sin backend:
-
-```bash
-npm i -D @capacitor/core @capacitor/cli @capacitor/android
-npx cap init "Mi Control Financiero" com.luisarmando.micontrolfinanciero --web-dir .
-npx cap add android
-npx cap sync
-npx cap open android   # requiere Android Studio (o `gradle assembleDebug` con el SDK)
-```
-
-Los datos siguen viviendo en el dispositivo (WebView → localStorage). Para "Instalar en mi celular sin PC", la opción sin SDK local es compilar el APK en la nube (EAS Build) tras el wrap.
-
 ## Pendientes v2
 
-- Wrap APK con Capacitor (o PWA con service worker para instalar desde Chrome sin APK)
 - Migrar a IndexedDB (mejor rendimiento con muchos movimientos)
 - Importar/exportar CSV (JSON ya funciona)
 - Notificaciones de corte/límite/servicios
 - Presupuestos recurrentes automáticos mes a mes
 - Sección Vehículos dedicada (KTM RC 200) con historial
+- (Sin APK: el plan actual es web en Netlify; si algún día se quiere app instalable, PWA con service worker es el camino sin backend)

@@ -5,9 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "python3 -m http.server 8080",
+    "start": "npx --yes serve -l 8080 .",
     "test": "node --test \"tests/*.test.js\"",
-    "css": "npx @tailwindcss/cli -i src/input.css -o css/tailwind.css --minify"
+    "css": "npx @tailwindcss/cli -i src/input.css -o css/tailwind.css --minify",
+    "data": "node --input-type=module -e \"import {writeFileSync,mkdirSync} from 'node:fs'; import {buildSeedData} from './src/seed.js'; mkdirSync('data',{recursive:true}); writeFileSync('data/app-data.json', JSON.stringify(buildSeedData(), null, 2) + '\\n'); console.log('data/app-data.json generado')\""
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",

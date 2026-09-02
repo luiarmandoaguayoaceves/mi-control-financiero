@@ -1,0 +1,5 @@
+# Deploy estático a Netlify (sin build): publica la raíz del proyecto.
+[build]
+  publish = "."
+
+# El sitio es 100% estático: sin comandos de build, sin backend.

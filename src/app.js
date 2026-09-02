@@ -2,7 +2,7 @@
 // app.js — arranque, hash router, acciones (event delegation), tema.
 // ============================================================
 import { store, state } from './screens/appState.js';
-import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
+import { load, subscribe, bootstrapFromFile, addTransaction, updateTransaction, deleteTransaction, fundMovement, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
 import { renderDashboard } from './screens/dashboard.js';
 import { renderMovements } from './screens/movements.js';
 import { renderCard } from './screens/card.js';
@@ -607,6 +607,10 @@ window.addEventListener('hashchange', () => {
 store.data = load();
 parseHash();
 render();
+bootstrapFromFile().then(() => {
+  store.data = load();
+  render();
+});
 subscribe((data) => {
   store.data = data;
   render();
