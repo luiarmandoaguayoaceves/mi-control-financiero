@@ -1,0 +1,195 @@
+# PROMPT MODIFICADO: Mi Control Financiero — versión HTML + Tailwind + JS
+# (Reemplaza el stack Expo/React Native/TypeScript por web estática que se
+#  convierte en APK con Capacitor; misma lógica, mismos datos, mismo seed)
+
+Quiero que desarrolles una aplicación móvil para Android de finanzas personales usando el CAMINO WEB: **HTML5 + Tailwind CSS + JavaScript (vanilla, SIN framework)**.
+
+IMPORTANTE:
+- Mi máquina tiene Node.js v24.11.0, pero la app NO debe requerir Node para ejecutarse: al final debe ser una carpeta de archivos estáticos (HTML + CSS compilado + JS) que se abre en cualquier navegador y se envuelve en APK después con Capacitor.
+- NO tengo Java, Android SDK, Flutter ni Android Studio.
+- No quiero React, React Native, Vue, Angular ni TypeScript en esta fase. JavaScript puro con ES Modules.
+- No quiero backend en la primera versión. Nada de servidores, cuentas ni nube.
+- Toda la información se almacena LOCALMENTE en el dispositivo en formato JSON usando `localStorage` (llave única tipo `mcf_app_data_v1`).
+- La app debe quedar diseñada para migrar después a IndexedDB/SQLite/Cloud sin rehacer las pantallas: capa `store.js` (repositorio) que aísle el acceso a datos.
+- Idioma de toda la interfaz: español. Moneda principal: MXN. Fechas locales de México (es-MX).
+- Diseño: limpio, moderno, sobrio, estilo dashboard financiero. Modo oscuro compatible con el sistema (clase `.dark` en `<html>`, preferencia guardada en localStorage, default = seguir al sistema).
+- Tailwind CSS COMPILADO en `css/tailwind.css` (sin CDN: la app debe funcionar offline en el APK).
+- Estructura pensada para envolver con Capacitor → APK instalable, sin depender de servidores.
+
+NOMBRE PROVISIONAL:
+"Mi Control Financiero"
+
+OBJETIVO:
+Crear una aplicación personal para administrar mis finanzas reales día a día, reemplazando gradualmente mi Excel. Debe ayudarme a saber:
+1. cuánto dinero tengo,
+2. cuánto de ese dinero ya está comprometido,
+3. cuánto puedo gastar realmente,
+4. cuánto debo en tarjetas,
+5. cuánto tengo en apartados,
+6. cuánto gasto en renta, agua, luz, gas, internet, teléfono, comida, transporte, suscripciones, moto, hogar y diversión,
+7. cuánto ahorro,
+8. cuánto crece o disminuye mi patrimonio,
+9. cómo voy respecto a mis metas financieras.
+
+PRINCIPIO CENTRAL DE LA APP:
+"Saldo bancario NO es igual a dinero libre".
+
+La app debe calcular:
+dinero libre real =
+saldo disponible
+- dinero comprometido para TDC
+- gastos esenciales pendientes
+- provisiones próximas
+- metas/apartados protegidos que no deben tocarse.
+
+ARQUITECTURA DE DATOS
+
+Crear los mismos modelos (como objetos/constantes en `src/models.js`):
+
+1. Account: id, name, institution, type (debit|credit|cash|savings), balance, creditLimit?, availableCredit?, active, notes?
+2. Transaction: id, date (YYYY-MM-DD), description, amount, type (expense|income|transfer|creditPayment), categoryId, paymentMethod, accountId, fundId?, toAccountId? (solo transferencias), merchant?, isCreditCardPurchase, isPending, notes?, createdAt, updatedAt
+3. Category: id, name, group (Necesidad|Deseo|Ahorro/Inversión|Deuda/Pago|Ingreso), active. Categorías iniciales: Renta, Agua, Luz, Gas, Internet, Teléfono, Suscripciones, Despensa, Comida fuera, Gasolina, Moto mantenimiento, Moto seguro, Moto trámites, Hogar, Equipar depa, Diversión, Viajes, Salud, TDC pago, Ahorro, Inversión, Otros, Ingreso
+4. Fund/Apartado: id, name, currentAmount, targetAmount?, purpose?, protected, active
+5. CreditCard: id, name, bank, creditLimit, currentBalance, cutDay, dueDate?, currentNoInterestPayment, availableCredit, points, active, notes?
+6. InstallmentPurchase: id, cardId, description, originalAmount, pendingBalance, monthlyPayment, totalMonths, currentPaymentNumber, interestRate, startDate, active
+7. Service: id, name, expectedMonthlyAmount, lastAmount?, dueDay?, categoryId, active, notes?
+8. Goal: id, name, targetAmount, currentAmount, priority (alta|media|baja), type (emergencia|provisión|compra|inversión|otro), deadline?, active, notes?
+9. Budget: id, month (YYYY-MM), categoryId, plannedAmount (actualAmount y variance se CALCULAN)
+10. Asset: id, name, estimatedValue, type, notes?
+11. Liability: id, name, outstandingBalance, interestRate?, monthlyPayment?, type, notes?
+12. FinancialSnapshot: date, cashAndAccounts, protectedFunds, creditCardDebt, installmentDebt, assets, liabilities, netWorth
+
+PERSISTENCIA (v1)
+- `localStorage` en formato JSON, llave única. Un solo blob `{version, accounts, transactions, categories, funds, creditCards, installmentPurchases, services, goals, budgets, assets, liabilities, snapshots, settings}`.
+- Capa `src/store.js`: ÚNICA puerta de escritura (load/save/subscribe + acciones CRUD). Las pantallas jamás tocan localStorage directo.
+- Lógica financiera pura en `src/finance.js` (sin tocar el DOM): funciones puras, probadas con `node --test` en `tests/`.
+- Datos seed en `src/seed.js` con mi información real (abajo).
+
+DATOS INICIALES / SEED (idénticos a mi información real)
+
+CUENTA BBVA NÓMINA
+- nombre: Nómina BBVA, tipo: debit, saldo: 12074.73 MXN, referencia: 25 agosto 2026
+
+APARTADOS BBVA (total 16401 MXN)
+- Renta: 2500 · Fondo de emergencia: 4000 · Servicios: 1500 · Mensualidades: 2000 · Equip depa: 6401 · Pagos TDC: 0
+
+FONDO DE EMERGENCIA
+- meta: 39000 MXN, actual: 4000, prioridad: alta
+
+TARJETA BBVA AZUL
+- línea: 111700 MXN · saldo utilizado observado después del pago: 20000.50 MXN · corte: día 12 · límite último estado: 1 septiembre 2026 · pago para no generar intereses del corte 12-ago-2026: 8644.18 (YA LIQUIDADO el 25-ago-2026) · pago actual corte anterior: 0 · puntos: 268 · tasa variable: 66.30% anual · intereses últimos 12 meses: 0
+
+COMPRAS A MSI ACTIVAS (mensualidades 336 + 628 + 518 = 1482 MXN/mes)
+1. Emma Sleep: 4025.33, mensualidad 336, 12 MSI, pago 2 de 12 al corte 12-ago, 0%
+2. Refrigerador Walmart: 7529.80, mensualidad 628, 12 MSI, pago 1 de 12, 0%
+3. Lavasecadora LG WD12VVC4S6S: 9314.19, mensualidad 518, 18 MSI, pago 1 de 18, 0%
+
+NOTA: el saldo total de la tarjeta NO debe confundirse con el pago requerido del siguiente corte: parte pertenece a MSI futuros.
+
+ÚLTIMO ESTADO DE CUENTA (periodo 13-jul a 12-ago-2026, corte 12-ago)
+- Pago para no generar intereses: 8644.18 (ya cubierto) · Pago mínimo + MSI: 2878.25 · Pago mínimo: 1396.25 · Cargos regulares: 8644.18 · Cargos a meses: 16637.86 · Saldo deudor total: 25282.04
+
+MOVIMIENTOS DEL CICLO POSTERIOR AL 12 DE AGOSTO (todos con TDC, isCreditCardPurchase=true)
+- 14-ago OpenAI ChatGPT: 399.00 (Suscripciones)
+- 15-ago Bodega Aurrera / Bae Tonalá: 747.55 (Despensa)
+- 16-ago Railway: 85.53 (Suscripciones)
+- 16-ago Airbnb México: 10.00 (Viajes)
+- 16-ago Airbnb México: 10.00 (Viajes)
+- 17-ago Carnicería Don Chava: 296.27 (Despensa)
+- 19-ago Servicio / KiwiBon Serv Jesús: 550.00 (Otros, nota: clasificar después)
+- 20-ago Gasolina Petro7: 284.10 (Gasolina)
+- 20-ago Totalplay: 400.00 (Internet)
+- 23-ago Super abarrotes: 395.00 (Despensa)
+- Suma: 3177.45 MXN. Proyección del próximo pago (DINÁMICA): compras 3177.45 + MSI 1482 = 4659.45 MXN
+
+SERVICIOS
+- Renta 5000/mes (separar 2500 por quincena) · Agua 186 (recibo real, pagado) · Internet Totalplay 400 (promoción 6 meses; instalación ya pagada aparte) · Teléfono Telcel 780 (plan Libre 4 ~499 + equipo Edge 60 ~338 - cashback ~75) · Luz 73 (primer recibo, no asumir promedio) · Gas 101.43 (último recibo 321.43 incluyó ~220 de reconexión)
+- Suscripciones: ChatGPT 399 · DeepSeek 185 (varía 184-187) · Railway 86 (85-87) · AWS desactivada (cargos variables). Permitir editar y activar/desactivar.
+
+MOTO (KTM RC 200, 2020): un dueño, factura, ~80,000 km, llantas ~1 año, servicio hace ~3 meses, se reparará y pondrá a la venta. Gastos recientes: mano de obra 3000, pieza 600, cambio de propietario (otra moto) 3470; 5000 tomados del fondo de emergencia; suspensión pendiente pospuesta. Dejar arquitectura preparada para sección Vehículos. Provisiones aprendidas: seguro moto ~500/mes (meta 6000), servicio moto ~300/mes (meta 3600).
+
+PATRIMONIO: patrimonio neto = activos - pasivos. Pantalla para registrar efectivo, cuentas, inversiones, valor estimado de motos/vehículos y deudas, con evolución histórica (snapshots mensuales automáticos).
+
+REGLAS FINANCIERAS A IMPLEMENTAR (mismas que en el diseño original)
+1. Compra con TDC: cada peso gastado queda respaldado por un peso de efectivo (ej: compro 600 con tarjeta teniendo 1000 libres → mi dinero libre baja a 400 aunque la cuenta muestre 1000).
+2. "Monto a respaldar TDC" = compras del ciclo actual no cubiertas por un pago/apartado.
+3. MSI: NO exigir todo el monto original en efectivo; mostrar mensualidad total, número de MSI, saldo pendiente y % del ingreso mensual comprometido.
+4. Advertencia si las mensualidades reducen demasiado el margen mensual.
+5. Fondo de emergencia: no cuenta como dinero libre, meta configurable, cobertura en meses = fondo / gastos esenciales mensuales.
+6. Provisiones: gastos previsibles (seguro moto, servicio moto, mantenimiento, renovaciones) con cálculo automático de cuánto separar por mes.
+7. Gasto libre calculado después de obligaciones, necesidades, provisiones, respaldo TDC y ahorro/meta definida.
+8. Separar conceptualmente: gasto, ahorro, provisión, inversión, transferencia y pago de deuda.
+9. Distinguir "ahorro para consumo futuro" (vacaciones) de "construcción de patrimonio" (inversión).
+
+PANTALLAS (SINGLE PAGE APP con pestañas inferiores tipo móvil, hash routing, sin librerías)
+1. Inicio/Dashboard: KPIs (saldo disponible, total apartados, dinero protegido, gasto del mes, gasto libre real, deuda TDC, próximo pago TDC, MSI mensuales, fondo de emergencia + % avance, patrimonio neto) + alertas ("Tienes X pesos gastados con TDC sin respaldar", "Faltan X días para el corte", "Faltan X días para fecha límite", "Fondo de emergencia por debajo de la meta", "Presupuesto de categoría excedido") + botón "+ Registrar movimiento".
+2. Movimientos: lista filtrable por mes/categoría/cuenta/método/tipo, búsqueda por descripción, botón "+", tap para editar, borrar con confirmación.
+3. Nuevo/Editar movimiento (modal): fecha, descripción, monto, categoría, método, cuenta, ¿TDC?, pendiente, notas; tipos: gasto, ingreso, transferencia, pago TDC.
+4. Presupuesto: por mes, categoría, presupuesto, gastado, disponible, % usado, semáforo (verde <75%, amarillo 75-100%, rojo >100%).
+5. Servicios: tarjetas con último pago, promedio, presupuesto, variación, toggle activar/desactivar, editar monto.
+6. Tarjeta BBVA/Deudas: línea, saldo utilizado, disponible, corte, límite, compras regulares del ciclo, MSI del próximo periodo, pago proyectado, puntos; subsección MSI con tabla (mensualidad, pago N de M, saldo pendiente).
+7. Apartados: ingresar/retirar, propósito, proteger.
+8. Metas: progreso, prioridad, editar.
+9. Patrimonio: activos, pasivos, patrimonio neto, evolución mensual (snapshots).
+10. Reportes: ingreso, gasto total, necesidades, deseos, deuda, ahorro, inversión, tasa de ahorro, construcción de patrimonio; gráficas simples de barras en CSS puro (gasto por categoría, evolución patrimonio, evolución fondo emergencia).
+11. Configuración: editar categorías (activar/desactivar), cuentas (saldo), fecha de corte TDC, metas, moneda (MXN), ingreso mensual estimado (para % MSI y tasa de ahorro), exportar respaldo JSON (descarga de archivo), importar respaldo JSON, restablecer datos.
+
+FUNCIONES IMPORTANTES
+- Editar y borrar movimientos con confirmación previa.
+- Persistencia local (localStorage, JSON), filtros por fecha, búsqueda.
+- Formatos MXN (Intl.NumberFormat es-MX), fechas es-MX, modo oscuro, componentes accesibles (aria-labels), teclado móvil (inputmode numérico), estados vacíos y mensajes de error claros.
+- Exportar/importar respaldo JSON (FileSaver/download + input file) — sí en v1.
+- Gráficas simples en CSS puro (sin librerías).
+
+NO INCLUIR EN V1
+- conexión bancaria automática, scraping BBVA, credenciales bancarias, pagos desde la app, Open Banking, login multiusuario, nube obligatoria, inversiones automáticas, IA integrada, OCR de tickets, sincronización, publicación Play Store.
+
+SEGURIDAD
+- Nunca almacenar contraseñas, NIP, CVV o tokens. No pedir números completos de tarjeta (solo últimos 4 dígitos en pantalla). Los datos se quedan localmente en v1.
+
+ESTRUCTURA TÉCNICA DESEADA
+
+mi-control-financiero/
+  index.html
+  css/tailwind.css          # Tailwind COMPILADO (no CDN)
+  src/
+    input.css               # fuente Tailwind v4 (@import "tailwindcss"; @custom-variant dark...)
+    models.js               # modelos y constantes
+    format.js               # dinero MXN, fechas es-MX (puro)
+    finance.js              # lógica financiera PURA (testeada)
+    seed.js                 # datos iniciales reales
+    store.js                # repositorio localStorage + acciones + efecto contable
+    ui.js                   # helpers de render (KPI, progress, bar, chip, modal, empty, alert)
+    screens/                # dashboard, movements, newMovement, card, funds, services, goals, budget, assets, reports, settings, more
+    app.js                  # arranque, router de hash, pestañas, tema oscuro
+  tests/                    # node --test (lógica financiera + seed)
+  README.md
+
+Herramientas:
+- Tailwind CSS v4 compilado con `@tailwindcss/cli`: `npx @tailwindcss/cli -i src/input.css -o css/tailwind.css --minify`
+- JavaScript puro con ES Modules. Sin framework, sin bundler, sin CDN en runtime.
+- Tests: `node --test "tests/*.test.js"` (Node ejecuta JS directamente, sin dependencias).
+- Servir para desarrollo: `python3 -m http.server 8080` (o cualquier servidor estático). La carpeta final es 100% estática.
+
+ENTREGABLE DE ESTA EJECUCIÓN
+
+NO me des solamente instrucciones. TRABAJA EN EL PROYECTO:
+1. Borra cualquier proyecto anterior en el directorio y crea la estructura nueva.
+2. Implementa models.js, format.js, finance.js (con tests primero: node --test, RED → GREEN), seed.js, store.js.
+3. Inserta los datos seed con mi información real.
+4. Construye las 11 pantallas funcionales + navegación de pestañas.
+5. Compila Tailwind a css/tailwind.css (sin CDN).
+6. Edición y borrado de movimientos, exportar/importar JSON.
+7. Modo oscuro siguiendo al sistema + toggle manual.
+8. Verifica: `node --test` pasa, la app abre en navegador (dashboard con mis datos), registrar un gasto actualiza el Dashboard, no hay errores de consola.
+9. Al final dame: archivos creados, arquitectura, decisiones importantes, pendientes para v2 (migrar a IndexedDB, wrap APK con Capacitor, notificaciones, etc.).
+
+FORMA DE TRABAJAR
+- No preguntes por decisiones pequeñas: toma decisiones razonables. Prioriza simplicidad y posibilidad de cambiar después. No sobreingenierizar.
+- Primero quiero una versión funcional en el teléfono (navegador del celular en la misma red, o APK con Capacitor después).
+- Trabaja por etapas hasta tener el MVP ejecutable. Escribe archivos reales, no pseudocódigo.
+- Si una librería da problemas, reemplázala por alternativa compatible o código propio simple.
+- Documenta brevemente las partes importantes en README.md.
+
+CRITERIO DE ÉXITO
+Al ejecutar `python3 -m http.server 8080` y abrir `http://localhost:8080` (o la IP de mi máquina desde el celular) veo una app funcional con mis datos financieros iniciales, puedo registrar un nuevo gasto y el Dashboard se actualiza al instante. La carpeta completa es estática y lista para envolver en APK con Capacitor sin backend.

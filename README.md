@@ -1,6 +1,7 @@
 # Mi Control Financiero
 
-App personal de finanzas (Android, v1 local) — **Expo + React Native + TypeScript**.
+App personal de finanzas (v2, web estática) — **HTML + Tailwind CSS + JavaScript vanilla**.
+Cero backend, cero dependencias en runtime: los datos viven en el dispositivo como JSON (`localStorage`).
 
 Principio central: **"Saldo bancario NO es igual a dinero libre"**.
 
@@ -12,61 +13,52 @@ dinero libre real =
   − gastos esenciales pendientes (servicios con día de cobro próximo no cubiertos)
 ```
 
-## Requisitos
-
-- Node.js 20+ (probado con v24)
-- Celular Android con **Expo Go** (Play Store)
-- Sin necesidad de Java / Android Studio / Flutter
-
-## Puesta en marcha
+## Correr
 
 ```bash
-npm install
-npm start          # aparece un QR
+python3 -m http.server 8080      # o cualquier servidor estático
+# abrir http://localhost:8080  (desde el celular: http://<IP-de-tu-PC>:8080)
 ```
 
-En el celular: abrir **Expo Go** → **Scan QR code** (Android escanea desde la app; si estás en otra red, usa `npx expo start --tunnel`).
+No hace falta Node para ejecutarla: la carpeta es 100% estática.
 
-## Comandos
+## Comandos (solo para desarrollo)
 
 | Comando | Qué hace |
 | --- | --- |
-| `npm start` | Levanta Metro (QR para Expo Go) |
-| `npm run typecheck` | TypeScript estricto (`tsc --noEmit`) |
-| `npm test` | Tests de la lógica financiera (Node nativo, sin RN) |
+| `npm run css` | Recompila Tailwind v4 → `css/tailwind.css` |
+| `npm test` | 37 tests: lógica financiera, seed y smoke de todas las pantallas |
+| `npm start` | Servidor estático (python3) en el puerto 8080 |
 
 ## Estructura
 
 ```
+index.html
+css/tailwind.css          Tailwind COMPILADO (sin CDN, funciona offline)
 src/
-  components/     UI reutilizable (KpiCard, ProgressBar, BarChart, ModalInput…)
-  screens/        Dashboard, Movimientos, Nuevo/Editar, Tarjeta, Apartados,
-                  Servicios, Metas, Presupuesto, Patrimonio, Reportes, Config
-  navigation/     Tabs + stack "Más" + modal de nuevo movimiento
-  models/         Interfaces de dominio (Account, Transaction, Fund, CreditCard…)
-  repositories/   Única puerta de escritura sobre los datos
-  services/       financeService (lógica pura, testeada) y seedService
-  database/       storage.ts (AsyncStorage aislado tras el repositorio)
-  hooks/          useAppData (contexto de datos + acciones) y useTheme
-  utils/          format.ts (moneda MXN, fechas es-MX)
-  constants/      categorías, grupos, métodos de pago
-  theme/          colores claro/oscuro, tipografía, espaciado
-  seed/           datos iniciales reales (25-ago-2026)
-tests/            node --test (lógica financiera + datos del seed)
+  input.css               fuente Tailwind (@import + @custom-variant dark)
+  models.js               modelos y constantes
+  format.js               dinero MXN, fechas es-MX (puro)
+  finance.js              lógica financiera PURA (testeada con node --test)
+  seed.js                 datos iniciales reales (25-ago-2026)
+  store.js                repositorio localStorage + efecto contable
+  ui.js                   helpers de render (KPI, progress, chips, barras…)
+  app.js                  arranque, router de hash, acciones, tema oscuro
+  screens/                dashboard, movements, card, funds, services, goals,
+                          budget, assets, reports, settings, more, modals
+tests/                    node --test (finance, seed, smoke)
 ```
 
 ## Decisiones importantes
 
-1. **AsyncStorage en v1, no expo-sqlite.** El repositorio (`src/repositories/`) y el storage están aislados: migrar a SQLite/Firebase es reemplazar `database/storage.ts` + el repositorio sin tocar pantallas.
-2. **Saldos de cuentas como verdad contable.** El seed se inserta ya conciliado (el saldo de la nómina y la tarjeta YA incluyen los movimientos sembrados). Los movimientos NUEVOS que registres sí ajustan saldos automáticamente: gasto con débito baja la cuenta, compra TDC sube el saldo de la tarjeta, pago TDC baja ambos.
-3. **Respaldo TDC = compras del ciclo actual posteriores al último pago.** Con el seed: 3,177.45. Pago proyectado = respaldo + MSI del mes = **3,177.45 + 1,482 = 4,659.45** (dinámico).
-4. **MSI**: solo se exige respaldar la mensualidad mensual, no el monto total. Se muestra mensualidad, número de MSI, saldo pendiente y % del ingreso (si defines ingreso mensual en Configuración).
-5. **El saldo total de la tarjeta (20,000.50) no es el pago requerido**: parte es MSI futuro. La app lo separa explícitamente.
-6. **Fondo de emergencia**: no cuenta como dinero libre, meta configurable, cobertura en meses = fondo / gastos esenciales mensuales (suma de servicios activos).
-7. **Gráficas simples propias** (BarChart) en lugar de una librería externa: cero riesgo de romper el arranque en Expo Go.
-8. **Transferencias**: el modelo `Transaction` usa `toAccountId` opcional (extensión mínima del modelo pedido).
-9. **Modo oscuro** automático (sigue al sistema), moneda MXN, fechas es-MX.
-10. **Seguridad**: sin contraseñas/NIP/CVV/tokens; solo se muestran los últimos 4 dígitos del nombre de la tarjeta; todo local.
+1. **localStorage (JSON) en v1** detrás de `store.js`: única puerta de escritura; migrar a IndexedDB/SQLite/Cloud es reemplazar ese módulo sin tocar pantallas.
+2. **Saldos como verdad contable**: el seed se inserta ya conciliado; los movimientos NUEVOS ajustan saldos (gasto débito baja la cuenta, compra TDC sube la tarjeta, pago TDC baja ambas, ingreso a apartado sube el fondo).
+3. **Respaldo TDC = compras del ciclo posteriores al último pago**: con el seed, 3,177.45. Pago proyectado = respaldo + MSI del mes = **4,659.45** (dinámico).
+4. **MSI**: solo se respalda la mensualidad mensual, no el total. El saldo de la tarjeta (20,000.50) se muestra separado del pago requerido (parte es MSI futuro).
+5. **Tailwind compilado** (no CDN): la app funciona sin internet y queda lista para el APK.
+6. **Modo oscuro** por clase `.dark` en `<html>`: sigue al sistema por defecto, con toggle manual (persistido).
+7. **Gráficas CSS puras** (sin librerías): cero fricción en el wrap a APK.
+8. **ES Modules**: requiere servirlo por HTTP (no `file://`).
 
 ## Números del seed (25-ago-2026)
 
@@ -81,15 +73,27 @@ tests/            node --test (lógica financiera + datos del seed)
 | Pago proyectado próximo corte | 4,659.45 |
 | Patrimonio neto | 5,925.50 (incluye moto estimada 45,000) |
 
-> Nota: el "dinero libre" sale negativo con los datos iniciales porque los apartados (16,401) superan el saldo (12,074.73). Es la consecuencia honesta de la fórmula; se normaliza al registrar ingresos o ajustar saldos reales.
+> El "dinero libre" sale negativo con los datos iniciales porque los apartados (16,401) superan el saldo (12,074.73): es la consecuencia honesta de la fórmula; se normaliza al registrar ingresos o ajustar saldos.
+
+## APK (siguiente paso)
+
+La carpeta ya es estática y apta para envolverse con **Capacitor** (HTML/JS → APK) sin backend:
+
+```bash
+npm i -D @capacitor/core @capacitor/cli @capacitor/android
+npx cap init "Mi Control Financiero" com.luisarmando.micontrolfinanciero --web-dir .
+npx cap add android
+npx cap sync
+npx cap open android   # requiere Android Studio (o `gradle assembleDebug` con el SDK)
+```
+
+Los datos siguen viviendo en el dispositivo (WebView → localStorage). Para "Instalar en mi celular sin PC", la opción sin SDK local es compilar el APK en la nube (EAS Build) tras el wrap.
 
 ## Pendientes v2
 
-- Migrar storage a **expo-sqlite** (repositorio ya listo) y después Cloud/Firebase con autenticación.
-- Importar/exportar **CSV** (el respaldo JSON ya funciona) y respaldo automático.
-- Gráficas avanzadas (librería tipo victory-native/react-native-chart-kit) y comparativas.
-- Sección **Vehículos** dedicada (KTM RC 200) con historial de servicio/valor.
-- Recordatorios/notificaciones de corte, fecha límite y servicios.
-- Presupuestos recurrentes automáticos mes a mes.
-- Edición de categorías (agregar/renombrar) dentro de Configuración.
-- Sincronización entre celular y otros dispositivos (fuera del alcance de v1).
+- Wrap APK con Capacitor (o PWA con service worker para instalar desde Chrome sin APK)
+- Migrar a IndexedDB (mejor rendimiento con muchos movimientos)
+- Importar/exportar CSV (JSON ya funciona)
+- Notificaciones de corte/límite/servicios
+- Presupuestos recurrentes automáticos mes a mes
+- Sección Vehículos dedicada (KTM RC 200) con historial
