@@ -8,7 +8,7 @@ IMPORTANTE:
 - Mi máquina tiene Node.js v24.11.0, pero la app NO debe requerir backend: al final debe ser una carpeta de archivos estáticos (HTML + CSS compilado + JS) que se sube a Netlify.
 - NO quiero React, React Native, Vue, Angular ni TypeScript en esta fase. JavaScript puro con ES Modules.
 - No quiero backend ni servidores propios. La app se publica en Netlify (hosting estático).
-- Los datos se almacenan como JSON en el mismo proyecto: un archivo base `data/app-data.json` (versionado, se lee con fetch en el primer arranque) + tus cambios en `localStorage` del navegador (única forma de persistir en un sitio estático). El flujo: usa la app → Configuración → Exportar respaldo JSON → reemplaza `data/app-data.json` → commit → Netlify se redespliega.
+- Los datos se almacenan como JSON en el navegador (`localStorage`): única forma de persistir en un sitio estático. Los despliegues a Netlify NUNCA tocan esos datos. Para moverlos entre dispositivos: Configuración → Exportar/Importar respaldo JSON.
 - La app debe quedar diseñada para migrar después a IndexedDB/Cloud sin rehacer las pantallas: capa `store.js` (repositorio) que aísle el acceso a datos.
 - Idioma de toda la interfaz: español. Moneda principal: MXN. Fechas locales de México (es-MX).
 - Diseño: limpio, moderno, sobrio, estilo dashboard financiero. Modo oscuro compatible con el sistema (clase `.dark` en `<html>`, preferencia guardada en localStorage, default = seguir al sistema).
@@ -59,11 +59,11 @@ Crear los mismos modelos (como objetos/constantes en `src/models.js`):
 12. FinancialSnapshot: date, cashAndAccounts, protectedFunds, creditCardDebt, installmentDebt, assets, liabilities, netWorth
 
 PERSISTENCIA (v1)
-- JSON en el mismo proyecto: `data/app-data.json` como base versionada (la app lo lee con `fetch('data/app-data.json')` en el primer arranque; si no existe, usa `src/seed.js`).
-- `localStorage` (llave `mcf_app_data_v1`) como persistencia real en runtime: única forma de guardar en un hosting estático como Netlify.
-- Capa `src/store.js`: ÚNICA puerta de escritura (load/bootstrap/persist + acciones CRUD + efecto contable). Las pantallas jamás tocan localStorage directo.
+- `localStorage` (llave `mcf_app_data_v1`) como ÚNICA fuente de verdad en runtime: funciona en un hosting estático como Netlify y los despliegues NUNCA tocan estos datos.
+- Datos iniciales en `src/seed.js` (mi información real, abajo): se usan solo en el primer arranque de un navegador que nunca ha guardado nada.
+- Para mover datos entre dispositivos/navegadores (son almacenes separados): Configuración → Exportar respaldo JSON → Importar respaldo JSON en el otro.
+- Capa `src/store.js`: ÚNICA puerta de escritura (load/persist + acciones CRUD + efecto contable). Las pantallas jamás tocan localStorage directo.
 - Lógica financiera pura en `src/finance.js` (sin tocar el DOM): funciones puras, probadas con `node --test` en `tests/`.
-- Datos seed en `src/seed.js` con mi información real (abajo); comando `npm run data` regenera `data/app-data.json` desde el seed.
 
 DATOS INICIALES / SEED (idénticos a mi información real)
 
@@ -152,7 +152,6 @@ ESTRUCTURA TÉCNICA DESEADA
 mi-control-financiero/
   index.html
   netlify.toml             # publish = "." (sin build)
-  data/app-data.json       # JSON base de datos del proyecto (versionado)
   css/tailwind.css         # Tailwind COMPILADO (no CDN)
   src/
     input.css              # fuente Tailwind v4 (@import "tailwindcss"; @custom-variant dark...)
@@ -160,7 +159,7 @@ mi-control-financiero/
     format.js              # dinero MXN, fechas es-MX (puro)
     finance.js             # lógica financiera PURA (testeada)
     seed.js                # datos iniciales reales
-    store.js               # repositorio: app-data.json → localStorage → seed
+    store.js               # repositorio: localStorage (única fuente) + seed inicial
     ui.js                  # helpers de render (KPI, progress, bar, chip, modal, empty, alert)
     screens/               # dashboard, movements, newMovement, card, funds, services, goals, budget, assets, reports, settings, more
     app.js                 # arranque, router de hash, pestañas, tema oscuro
@@ -179,10 +178,10 @@ ENTREGABLE DE ESTA EJECUCIÓN
 NO me des solamente instrucciones. TRABAJA EN EL PROYECTO:
 1. Borra cualquier proyecto anterior en el directorio y crea la estructura nueva.
 2. Implementa models.js, format.js, finance.js (con tests primero: node --test, RED → GREEN), seed.js, store.js.
-3. Inserta los datos seed con mi información real y genera `data/app-data.json` (npm run data).
+3. Inserta los datos seed con mi información real (primer arranque en navegadores sin datos).
 4. Construye las 11 pantallas funcionales + navegación de pestañas.
 5. Compila Tailwind a css/tailwind.css (sin CDN).
-6. Edición y borrado de movimientos, exportar/importar JSON (exportar reemplaza data/app-data.json para versionar tus datos).
+6. Edición y borrado de movimientos, exportar/importar JSON (respaldo manual y migración entre dispositivos).
 7. Modo oscuro siguiendo al sistema + toggle manual.
 8. Verifica: `node --test` pasa, la app abre en navegador (dashboard con mis datos), registrar un gasto actualiza el Dashboard, no hay errores de consola.
 9. Al final dame: archivos creados, arquitectura, decisiones importantes, pendientes para v2 (migrar a IndexedDB, CSV, notificaciones, PWA, etc.).
@@ -195,4 +194,4 @@ FORMA DE TRABAJAR
 - Documenta brevemente las partes importantes en README.md.
 
 CRITERIO DE ÉXITO
-Al ejecutar `npm start` (npx serve) y abrir `http://localhost:8080` (o la IP de mi máquina desde el celular) veo una app funcional con mis datos financieros iniciales (leídos de `data/app-data.json`), puedo registrar un nuevo gasto y el Dashboard se actualiza al instante. La carpeta completa se sube a Netlify y funciona igual (los cambios quedan en localStorage del navegador y se versionan exportando el JSON a `data/app-data.json`).
+Al ejecutar `npm start` (npx serve) y abrir `http://localhost:8080` (o la IP de mi máquina desde el celular) veo una app funcional con mis datos financieros iniciales, puedo registrar un nuevo gasto y el Dashboard se actualiza al instante. La carpeta completa se sube a Netlify y funciona igual: los datos viven en localStorage del navegador y los despliegues nunca los tocan (exportar/importar JSON para moverlos entre dispositivos).

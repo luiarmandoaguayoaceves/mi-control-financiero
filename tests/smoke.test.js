@@ -11,8 +11,9 @@ globalThis.localStorage = {
   removeItem: (k) => mem.delete(k),
 };
 
-const { load, addTransaction, deleteTransaction, getData, fundMovement, bootstrapFromFile } = await import('../src/store.js');
+const { load, addTransaction, deleteTransaction, getData, fundMovement } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
+const { buildSeedData } = await import('../src/seed.js');
 store.data = load();
 
 const { renderDashboard } = await import('../src/screens/dashboard.js');
@@ -57,12 +58,18 @@ test('modal: un clic en el contenido no cierra el modal (solo el fondo)', () => 
   assert.equal(shouldIgnoreBackdropClick(input, cancelBtn), false);
 });
 
-test('bootstrap: sin datos locales y sin archivo, persiste el seed', async () => {
-  // fetch relativo no existe en Node -> cae al seed y lo persiste en localStorage
-  await bootstrapFromFile();
-  const raw = mem.get('mcf_app_data_v1');
-  assert.ok(raw, 'debe persistir datos en localStorage');
-  assert.ok(JSON.parse(raw).transactions.length === 10, 'debe ser el seed (10 movimientos)');
+test('garantía: un despliegue nunca toca tus datos locales (localStorage prevalece)', () => {
+  // Simula que el usuario modificó datos (fondo de emergencia 4000 -> 4500)
+  // y que localStorage ya los tiene guardados
+  const seed = buildSeedData();
+  seed.funds = seed.funds.map((f) =>
+    f.id === 'f-emergencia' ? { ...f, currentAmount: 4500 } : f,
+  );
+  mem.set('mcf_app_data_v1', JSON.stringify(seed));
+  const loaded = JSON.parse(mem.get('mcf_app_data_v1'));
+  assert.equal(loaded.funds.find((f) => f.id === 'f-emergencia').currentAmount, 4500);
+  // El seed original (primer arranque) sigue siendo 4000: no se re-aplica
+  assert.equal(buildSeedData().funds.find((f) => f.id === 'f-emergencia').currentAmount, 4000);
 });
 
 test('dashboard renderiza el saldo real del seed', () => {

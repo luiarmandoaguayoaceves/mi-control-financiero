@@ -1,12 +1,9 @@
 // ============================================================
 // Repositorio de datos: única puerta de escritura.
-// Estrategia (sin backend, apta para Netlify):
-//   1. data/app-data.json  -> JSON base versionado EN EL PROYECTO
-//      (la app lo lee con fetch en el primer arranque)
-//   2. localStorage        -> tus cambios en runtime (persistencia real)
-//   3. src/seed.js         -> respaldo si no existe el archivo
-// La pantalla Configuración exporta/importa JSON para mover datos
-// entre el navegador y data/app-data.json.
+// localStorage es la ÚNICA fuente de verdad en runtime (per-navegador/
+// per-dispositivo). Los despliegues (Netlify, git) NUNCA tocan estos datos.
+// Para mover datos entre dispositivos: Configuración → Exportar JSON →
+// Importar JSON en el otro dispositivo (no hay carga automática de archivos).
 // ============================================================
 import { STORAGE_KEY, APP_DATA_VERSION } from './models.js';
 import { buildSeedData } from './seed.js';
@@ -42,9 +39,8 @@ function persist(data) {
 }
 
 /**
- * Carga síncrona: localStorage (tus cambios) o, si está vacío,
- * el seed en memoria (aún sin persistir: bootstrap decide si la
- * base es data/app-data.json o el seed).
+ * Carga síncrona: tus datos de localStorage o, si nunca has guardado nada
+ * en ESTE navegador, el seed inicial (solo como primer arranque).
  */
 export function load() {
   if (cache) return cache;
@@ -59,28 +55,6 @@ export function load() {
   }
   cache = buildSeedData();
   return cache;
-}
-
-/**
- * Primer arranque: si no hay datos locales, intenta leer el JSON del
- * proyecto (data/app-data.json). Si no existe, usa el seed.
- * Se llama una sola vez desde app.js.
- */
-export async function bootstrapFromFile() {
-  if (localStorage.getItem(STORAGE_KEY)) return; // ya hay datos locales
-  try {
-    const res = await fetch('data/app-data.json', { cache: 'no-store' });
-    if (res.ok) {
-      const parsed = await res.json();
-      if (parsed && Array.isArray(parsed.transactions)) {
-        persist({ ...parsed, version: APP_DATA_VERSION });
-        return;
-      }
-    }
-  } catch (e) {
-    // Sin archivo o sin red: usa el seed
-  }
-  persist(cache || buildSeedData());
 }
 
 function get() {

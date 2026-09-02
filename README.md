@@ -22,25 +22,22 @@ npm start                  # usa npx serve -l 8080 .  (npx se descarga solo)
 
 ## Subir a Netlify
 
-1. `npm run data` si cambiaste el seed (regenera `data/app-data.json`)
-2. Sube el proyecto a un repo de GitHub o arrastra la carpeta en https://app.netlify.com/drop
-3. Netlify detecta `netlify.toml` (publica la raíz, sin build). Listo.
-4. `node_modules/` no se publica (lo ignora Netlify); si arrastras la carpeta, puedes borrarla antes.
+1. Sube el proyecto a un repo de GitHub o arrastra la carpeta en https://app.netlify.com/drop
+2. Netlify detecta `netlify.toml` (publica la raíz, sin build). Listo.
+3. `node_modules/` no se publica (lo ignora Netlify); si arrastras la carpeta, puedes borrarla antes.
 
-## Cómo se guardan los datos (JSON en el proyecto, sin backend)
+## Cómo se guardan los datos (sin backend)
 
 | Capa | Qué es | Cuándo se usa |
 | --- | --- | --- |
-| `data/app-data.json` | JSON base versionado EN EL PROYECTO | Se lee en el primer arranque (fetch) y es la base que sube a Netlify |
-| `localStorage` | Tus cambios en el navegador | Persistencia real día a día (por eso funciona en Netlify: es 100% del lado del cliente) |
-| `src/seed.js` | Respaldo | Si no existe el archivo JSON |
+| `localStorage` | TUS datos (por navegador/dispositivo) | ÚNICA fuente de verdad en runtime |
+| `src/seed.js` | Datos iniciales de referencia | Solo en el primer arranque de un navegador que nunca ha guardado nada |
 
-Flujo para "alimentar" el proyecto con tus datos:
-1. Usa la app normalmente (todo se guarda en tu navegador).
-2. Configuración → **Exportar respaldo JSON** → guarda el archivo como `data/app-data.json` (reemplazando el actual).
-3. `git commit` y Netlify se redespliega (o vuelve a arrastrar la carpeta).
-
-También puedes **editar `data/app-data.json` a mano** (es JSON legible) y recargar la app con datos locales borrados — al primer arranque tomará ese archivo como base. Si quieres regresar a la base del proyecto, Configuración → Restablecer y borra los datos del sitio en el navegador.
+REGLAS (para que nunca pierdas tus actualizaciones):
+- **Un despliegue NUNCA toca tus datos**: el código que subes a Netlify solo se sirve; no escribe nada en tu almacenamiento. Puedes redesplegar mil veces y tus finanzas siguen igual.
+- **localStorage es por navegador**: lo que capturas en tu PC no aparece automáticamente en tu celular ni en otro navegador (son almacenes separados). Para mover datos: Configuración → **Exportar respaldo JSON** → en el otro dispositivo Configuración → **Importar respaldo JSON**.
+- **localhost y tu URL de Netlify son orígenes distintos**: cada uno tiene su propio localStorage.
+- Si alguna vez quieres volver a empezar: Configuración → Restablecer a datos iniciales (o borra los datos del sitio en el navegador).
 
 ## PWA (instalable, offline)
 
@@ -48,8 +45,8 @@ La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos gen
 
 - **Instalar en Android**: al abrir la app verás un banner "Instala Mi Control Financiero" con botón **Instalar** (usa `beforeinstallprompt`); también puedes desde Chrome → menú ⋮ → "Instalar aplicación". Si lo descartas con ×, ya no vuelve a aparecer; si lo instalas, desaparece para siempre.
 - **En iOS Safari**: el banner muestra la instrucción Compartir → "Agregar a pantalla de inicio" (iOS no permite instalación automática).
-- **Offline**: el service worker cachea toda la app (CSS, JS, iconos y el JSON base). Sin red funciona igual; tus datos viven en localStorage.
-- **Estrategia de caché**: páginas y `data/app-data.json` son network-first (los deploys y el JSON actualizado llegan); el resto es cache-first con actualización en segundo plano.
+- **Offline**: el service worker cachea toda la app (CSS, JS e iconos). Sin red funciona igual; tus datos viven en localStorage.
+- **Estrategia de caché**: páginas son network-first (los deploys llegan); el resto es cache-first con actualización en segundo plano. Tus datos (localStorage) nunca pasan por el service worker.
 - **Actualizar la app**: Netlify tiene `Cache-Control: no-cache` para `/sw.js` y `/src/*` (ver `netlify.toml`); al publicar cambios, sube `CACHE_VERSION` en `sw.js` si cambiaste la lista de archivos precacheados.
 - **Requisito**: HTTPS (Netlify lo da gratis). En local, `localhost` también cuenta como contexto seguro.
 
@@ -58,9 +55,8 @@ La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos gen
 | Comando | Qué hace |
 | --- | --- |
 | `npm start` | Sirve la app con `npx serve` en http://localhost:8080 |
-| `npm test` | 38 tests: lógica financiera, seed, contabilidad y smoke de pantallas |
+| `npm test` | 45 tests: lógica financiera, seed, contabilidad y smoke de pantallas |
 | `npm run css` | Recompila Tailwind v4 → `css/tailwind.css` (tras cambiar clases) |
-| `npm run data` | Regenera `data/app-data.json` desde el seed |
 
 ## Estructura
 
@@ -69,7 +65,6 @@ index.html
 manifest.json             PWA: nombre, iconos, standalone
 sw.js                     Service worker: offline + cache
 netlify.toml              publish = "." (sin build) + headers para sw.js
-data/app-data.json        JSON base de datos del proyecto (versionado)
 icons/                    icon-192.png, icon-512.png, apple-touch-icon.png
 scripts/gen-icons.js      genera los iconos PNG (sin dependencias)
 css/tailwind.css          Tailwind COMPILADO (sin CDN, funciona offline)
@@ -79,7 +74,7 @@ src/
   format.js               dinero MXN, fechas es-MX (puro)
   finance.js              lógica financiera PURA (testeada con node --test)
   seed.js                 datos iniciales reales (25-ago-2026)
-  store.js                repositorio: app-data.json → localStorage → seed
+  store.js                repositorio: localStorage (única fuente) + seed inicial
   ui.js                   helpers de render (KPI, progress, chips, barras…)
   app.js                  arranque, router de hash, acciones, tema oscuro
   screens/                dashboard, movements, card, funds, services, goals,

@@ -2,11 +2,11 @@
 // Service Worker: PWA instalable + offline.
 // Estrategia:
 //   - Navegación e index.html : network-first (los deploys llegan)
-//   - data/app-data.json      : network-first (la base se actualiza), cache offline
 //   - Resto de assets (css/js) : cache-first con actualización en segundo plano
+// Los DATOS del usuario viven en localStorage y el service worker no los toca.
 // Al publicar cambios importantes, sube CACHE_VERSION.
 // ============================================================
-const CACHE_VERSION = 'mcf-pwa-v2';
+const CACHE_VERSION = 'mcf-pwa-v3';
 const CORE = [
   '/',
   '/index.html',
@@ -60,7 +60,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Página (navegación): red primero, caché si no hay red
+  // Navegación: red primero, caché si no hay red
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)
@@ -70,22 +70,6 @@ self.addEventListener('fetch', (e) => {
           return res;
         })
         .catch(() => caches.match(req).then((cached) => cached || caches.match('/index.html'))),
-    );
-    return;
-  }
-
-  // JSON base del proyecto: red primero (para recibir actualizaciones), caché offline
-  if (url.pathname === '/data/app-data.json') {
-    e.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_VERSION).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match(req)),
     );
     return;
   }
