@@ -2,7 +2,7 @@
 // Lógica financiera PURA (sin DOM, sin localStorage): testeable en Node.
 // Principio central: "Saldo bancario NO es igual a dinero libre".
 // ============================================================
-import { addDaysISO, addMonths, round2, toISODate, toMonthKey } from './format.js';
+import { addDaysISO, addMonths, round2, toISODate, toMonthKey, now as nowFn } from './format.js';
 
 export { round2 as roundMoney };
 
@@ -14,7 +14,7 @@ function parseDate(iso) {
 }
 
 /** Fecha ISO del siguiente día de corte (hoy o futuro). */
-export function nextCutDate(cutDay, now = new Date()) {
+export function nextCutDate(cutDay, now = nowFn()) {
   const day = Math.min(Math.max(cutDay, 1), 28);
   const candidate = new Date(now.getFullYear(), now.getMonth(), day);
   if (candidate.getTime() <= now.getTime()) {
@@ -24,20 +24,20 @@ export function nextCutDate(cutDay, now = new Date()) {
 }
 
 /** Fecha límite de pago: día 1 del mes siguiente al corte (patrón BBVA Azul). */
-export function nextDueDate(cutDay, now = new Date()) {
+export function nextDueDate(cutDay, now = nowFn()) {
   const cut = parseDate(nextCutDate(cutDay, now));
   return toISODate(new Date(cut.getFullYear(), cut.getMonth() + 1, 1));
 }
 
 /** Ciclo actual de la tarjeta: [último corte, próximo corte). */
-export function currentCycleRange(cutDay, now = new Date()) {
+export function currentCycleRange(cutDay, now = nowFn()) {
   const nextCut = parseDate(nextCutDate(cutDay, now));
   const start = addMonths(nextCut, -1);
   return { start: toISODate(start), end: toISODate(nextCut) };
 }
 
 /** Días hasta una fecha (para alertas de corte/límite). */
-export function daysUntilISO(iso, now = new Date()) {
+export function daysUntilISO(iso, now = nowFn()) {
   const target = parseDate(iso);
   const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   return Math.round((target.getTime() - a) / 86400000);
@@ -148,7 +148,7 @@ export function essentialMonthlyFromServices(services) {
 }
 
 /** Servicios con dueDay futuro en el mes actual no cubiertos por gastos ya registrados. */
-export function essentialPending(services, transactions, now = new Date()) {
+export function essentialPending(services, transactions, now = nowFn()) {
   const monthKey = toMonthKey(now);
   const today = now.getDate();
   const spentByCat = new Map();

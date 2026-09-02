@@ -1,7 +1,7 @@
 // Pantalla Inicio / Dashboard: KPIs y alertas financieras.
 import { store } from './appState.js';
 import { card, section, kpi, kpiGrid, progress, alert, empty, primaryBtn } from '../ui.js';
-import { money, money0, todayMonthKey, formatDate } from '../format.js';
+import { money, money0, todayMonthKey, todayISO, formatDate } from '../format.js';
 import {
   availableBalance,
   budgetStatus,
@@ -79,7 +79,7 @@ export function renderDashboard() {
   return `
     <div class="p-4 pb-10">
       <div class="mb-4">
-        <div class="text-xs text-slate-500 dark:text-slate-400">${formatDate(new Date().toISOString().slice(0, 10))}</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400">${formatDate(todayISO())}</div>
         <div class="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-1">Saldo disponible</div>
         <div class="text-4xl font-extrabold text-slate-900 dark:text-slate-50">${money(saldo)}</div>
         <div class="text-sm font-semibold ${libre < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">

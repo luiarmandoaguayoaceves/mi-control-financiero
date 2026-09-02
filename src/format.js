@@ -23,6 +23,20 @@ export function number2(n) {
 
 const pad = (n) => String(n).padStart(2, '0');
 
+// ---------- Reloj: dispositivo + sincronización con la red ----------
+// La hora puede corregirse con la cabecera Date del servidor (red),
+// con respaldo al reloj del dispositivo si no hay red.
+let timeOffsetMs = 0;
+
+export function setTimeOffset(ms) {
+  timeOffsetMs = Number.isFinite(ms) ? ms : 0;
+}
+
+/** Fecha/hora actual corregida (dispositivo + offset de red). */
+export function now() {
+  return new Date(Date.now() + timeOffsetMs);
+}
+
 /** Date local -> 'YYYY-MM-DD' */
 export function toISODate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -33,13 +47,13 @@ export function toMonthKey(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 }
 
-/** Hoy local como 'YYYY-MM-DD' */
+/** Hoy local (corregido por red) como 'YYYY-MM-DD' */
 export function todayISO() {
-  return toISODate(new Date());
+  return toISODate(now());
 }
 
 export function todayMonthKey() {
-  return toMonthKey(new Date());
+  return toMonthKey(now());
 }
 
 /** 'YYYY-MM-DD' -> Date local (evita el desfase UTC) */
@@ -68,9 +82,9 @@ export function formatMonthKeyShort(monthKey) {
 }
 
 /** Días naturales desde hoy hasta la fecha ISO (negativo si ya pasó). */
-export function daysUntil(iso, now = new Date()) {
+export function daysUntil(iso, ref = now()) {
   const target = parseISODate(iso);
-  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const a = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()).getTime();
   const b = target.getTime();
   return Math.round((b - a) / 86400000);
 }

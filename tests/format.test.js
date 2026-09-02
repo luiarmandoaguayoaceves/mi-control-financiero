@@ -9,7 +9,18 @@ import {
   todayMonthKey,
   shiftMonthKey,
   daysUntil,
+  setTimeOffset,
+  now,
 } from '../src/format.js';
+
+test('reloj: la hora usa el dispositivo y el offset de red la corrige', () => {
+  setTimeOffset(0);
+  assert.ok(Math.abs(now().getTime() - Date.now()) < 2000, 'sin red: reloj del dispositivo');
+  setTimeOffset(3600000); // el servidor va 1h adelante
+  assert.ok(Math.abs(now().getTime() - (Date.now() + 3600000)) < 2000, 'con red: hora corregida');
+  setTimeOffset(0);
+  assert.ok(Math.abs(now().getTime() - Date.now()) < 2000, 'reset a dispositivo');
+});
 
 test('money formatea MXN con 2 decimales', () => {
   assert.equal(money(1234.5), '$1,234.50');

@@ -17,7 +17,7 @@ import { renderSettings } from './screens/settings.js';
 import { renderModal } from './screens/modals.js';
 import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick, installPromptState, installBannerHtml } from './ui.js';
 import { THEME_KEY, STORAGE_KEY } from './models.js';
-import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero } from './format.js';
+import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero, setTimeOffset } from './format.js';
 
 const app = document.getElementById('app');
 
@@ -757,6 +757,37 @@ window.addEventListener('appinstalled', () => {
   render();
 });
 
+// ---------- Reloj: sincronizar con la red + cambio de día en vivo ----------
+
+/** Corrige el reloj con la cabecera Date del servidor (si hay red). */
+async function syncClock() {
+  try {
+    const res = await fetch(window.location.pathname || '/', { method: 'HEAD', cache: 'no-store' });
+    const serverDate = res.headers.get('Date');
+    if (serverDate) {
+      const serverMs = Date.parse(serverDate);
+      if (Number.isFinite(serverMs)) setTimeOffset(serverMs - Date.now());
+    }
+  } catch (e) {
+    // Sin red: se usa el reloj del dispositivo
+  }
+}
+
+// Cambio de día en vivo: si la app queda abierta a la medianoche,
+// la fecha y el mes visible se actualizan solos.
+let lastDay = todayISO();
+setInterval(() => {
+  const d = todayISO();
+  if (d === lastDay) return;
+  const oldMonth = lastDay.slice(0, 7);
+  lastDay = d;
+  const newMonth = d.slice(0, 7);
+  if (state.month === oldMonth) state.month = newMonth;
+  if (state.budgetMonth === oldMonth) state.budgetMonth = newMonth;
+  if (state.reportsMonth === oldMonth) state.reportsMonth = newMonth;
+  render();
+}, 30000);
+
 // ---------- Arranque ----------
 
 window.addEventListener('hashchange', () => {
@@ -769,6 +800,10 @@ window.addEventListener('hashchange', () => {
 store.data = load();
 parseHash();
 render();
+syncClock().then(() => {
+  lastDay = todayISO();
+  render();
+});
 subscribe((data) => {
   store.data = data;
   render();
