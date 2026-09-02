@@ -14,7 +14,7 @@ export function renderGoals() {
   const goals = data.goals.filter((g) => g.active);
 
   return `
-    <div class="p-4 pb-24">
+    <div class="p-4 pb-28">
       ${section('Metas y provisiones', goals.length === 0
         ? empty('Sin metas activas')
         : goals.map((g) => {

@@ -8,7 +8,7 @@ export function renderSettings() {
   const card = data.creditCards.find((c) => c.active) || data.creditCards[0];
 
   return `
-    <div class="p-4 pb-24">
+    <div class="p-4 pb-28">
       ${section('Datos', `
         <button data-action="install-app" class="w-full bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98] mb-2">Instalar la app en este dispositivo</button>
         <button data-action="export-json" class="w-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl py-3 active:scale-[0.98] mb-2">Exportar respaldo JSON</button>

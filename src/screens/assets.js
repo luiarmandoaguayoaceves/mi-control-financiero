@@ -33,7 +33,7 @@ export function renderAssets() {
   `;
 
   return `
-    <div class="p-4 pb-24">
+    <div class="p-4 pb-28">
       ${section('Patrimonio neto', `
         <div class="text-3xl font-extrabold ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}">${money(net)}</div>
         <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">

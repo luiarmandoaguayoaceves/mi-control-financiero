@@ -84,7 +84,7 @@ function navHtml() {
     { id: 'more', label: 'Más', icon: '📊' },
   ];
   return `
-    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)] z-40">
+    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)] z-50 shadow-[0_-4px_16px_rgba(15,23,42,0.12)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
       <div class="grid grid-cols-5">
         ${tabs.map((t) => {
           const active = state.view === t.id;

@@ -37,7 +37,7 @@ export function renderReports() {
   const delta = prevMonthSnap ? patrimonio - prevMonthSnap.netWorth : null;
 
   return `
-    <div class="p-4 pb-24">
+    <div class="p-4 pb-28">
       ${monthNav(month, formatMonthKeyShort(month))}
 
       ${kpiGrid([

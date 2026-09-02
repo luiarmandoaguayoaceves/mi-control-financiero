@@ -26,6 +26,8 @@ npm start                  # usa npx serve -l 8080 .  (npx se descarga solo)
 2. Netlify detecta `netlify.toml` (publica la raíz, sin build). Listo.
 3. `node_modules/` no se publica (lo ignora Netlify); si arrastras la carpeta, puedes borrarla antes.
 
+> Nota: los sitios subidos por **arrastrar la carpeta (Netlify Drop)** muestran un aviso promocional de Netlify flotando abajo. No es publicidad del sitio y no se puede quitar desde el código: desaparece al conectar el repo de GitHub (Deploy → repos de Git → elegir repo) y desplegar por Git. La navegación inferior y los modales ya están diseñados para no quedar tapados.
+
 ## Cómo se guardan los datos (sin backend)
 
 | Capa | Qué es | Cuándo se usa |

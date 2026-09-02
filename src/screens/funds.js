@@ -11,7 +11,7 @@ export function renderFunds() {
   const protegido = protectedFundsTotal(data.funds);
 
   return `
-    <div class="p-4 pb-24">
+    <div class="p-4 pb-28">
       ${section('Total en apartados', `
         <div class="flex justify-between items-baseline">
           <span class="text-3xl font-extrabold text-slate-900 dark:text-slate-50">${money(total)}</span>
