@@ -597,6 +597,17 @@ app.addEventListener('change', (e) => {
   }
 });
 
+// ---------- PWA: registro del service worker ----------
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('./sw.js')
+      .then(() => console.log('PWA lista: instalable y offline'))
+      .catch((e) => console.warn('Service worker no registrado', e));
+  });
+}
+
 // ---------- Arranque ----------
 
 window.addEventListener('hashchange', () => {

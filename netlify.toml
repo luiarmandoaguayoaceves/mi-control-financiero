@@ -3,3 +3,17 @@
   publish = "."
 
 # El sitio es 100% estático: sin comandos de build, sin backend.
+
+# PWA: el service worker nunca debe quedar cacheado por el CDN,
+# o las actualizaciones de la app no llegarían a los clientes.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Los módulos JS tampoco deben cachearse agresivamente en el CDN:
+# el service worker ya se encarga del caché del lado del cliente.
+[[headers]]
+  for = "/src/*"
+  [headers.values]
+    Cache-Control = "no-cache"

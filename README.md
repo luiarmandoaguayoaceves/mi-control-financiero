@@ -42,6 +42,16 @@ Flujo para "alimentar" el proyecto con tus datos:
 
 También puedes **editar `data/app-data.json` a mano** (es JSON legible) y recargar la app con datos locales borrados — al primer arranque tomará ese archivo como base. Si quieres regresar a la base del proyecto, Configuración → Restablecer y borra los datos del sitio en el navegador.
 
+## PWA (instalable, offline)
+
+La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos generados (`scripts/gen-icons.js`, sin dependencias).
+
+- **Instalar en Android**: abre la app en Chrome → menú ⋮ → "Instalar aplicación" (o "Agregar a pantalla de inicio"). Queda como app de pantalla completa, con su icono.
+- **Offline**: el service worker cachea toda la app (CSS, JS, iconos y el JSON base). Sin red funciona igual; tus datos viven en localStorage.
+- **Estrategia de caché**: páginas y `data/app-data.json` son network-first (los deploys y el JSON actualizado llegan); el resto es cache-first con actualización en segundo plano.
+- **Actualizar la app**: Netlify tiene `Cache-Control: no-cache` para `/sw.js` y `/src/*` (ver `netlify.toml`); al publicar cambios, sube `CACHE_VERSION` en `sw.js` si cambiaste la lista de archivos precacheados.
+- **Requisito**: HTTPS (Netlify lo da gratis). En local, `localhost` también cuenta como contexto seguro.
+
 ## Comandos
 
 | Comando | Qué hace |
@@ -55,8 +65,12 @@ También puedes **editar `data/app-data.json` a mano** (es JSON legible) y recar
 
 ```
 index.html
-netlify.toml              publish = "." (sin build)
+manifest.json             PWA: nombre, iconos, standalone
+sw.js                     Service worker: offline + cache
+netlify.toml              publish = "." (sin build) + headers para sw.js
 data/app-data.json        JSON base de datos del proyecto (versionado)
+icons/                    icon-192.png, icon-512.png, apple-touch-icon.png
+scripts/gen-icons.js      genera los iconos PNG (sin dependencias)
 css/tailwind.css          Tailwind COMPILADO (sin CDN, funciona offline)
 src/
   input.css               fuente Tailwind (@import + @custom-variant dark)
@@ -105,4 +119,4 @@ tests/                    node --test (finance, seed, smoke)
 - Notificaciones de corte/límite/servicios
 - Presupuestos recurrentes automáticos mes a mes
 - Sección Vehículos dedicada (KTM RC 200) con historial
-- (Sin APK: el plan actual es web en Netlify; si algún día se quiere app instalable, PWA con service worker es el camino sin backend)
+- PWA ya está: instalable desde Chrome/Netlify sin APK
