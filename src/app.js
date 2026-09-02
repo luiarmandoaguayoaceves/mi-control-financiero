@@ -103,7 +103,7 @@ function navHtml() {
     { id: 'more', label: 'Más', icon: '📊' },
   ];
   return `
-    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)] z-50 shadow-[0_-4px_16px_rgba(15,23,42,0.12)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+    <nav class="bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-[env(safe-area-inset-top)] z-40 shadow-[0_2px_8px_rgba(15,23,42,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
       <div class="grid grid-cols-5">
         ${tabs.map((t) => {
           const active = state.view === t.id;
@@ -133,8 +133,8 @@ function headerHtml() {
     : titles[state.view];
   const showBack = state.view === 'more' && state.moreView !== 'menu';
   return `
-    <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-md mx-auto flex items-center justify-between px-4 py-3">
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+      <div class="max-w-md mx-auto flex items-center justify-between px-4 py-2.5">
         <div class="flex items-center gap-1 min-w-0">
           ${showBack ? `<button data-action="more-back" aria-label="Volver al menú Más" class="text-3xl font-bold text-slate-500 dark:text-slate-400 leading-none px-1 -ml-2 active:scale-90">‹</button>` : ''}
           <h1 class="text-base font-extrabold text-slate-900 dark:text-slate-50 truncate">${title}</h1>
@@ -151,7 +151,7 @@ function headerHtml() {
 function toastHtml() {
   if (!state.toast) return '';
   return `
-    <div class="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-lg max-w-[90%]">
+    <div class="fixed top-32 left-1/2 -translate-x-1/2 z-50 bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-lg max-w-[90%]">
       ${state.toast}
     </div>
   `;

@@ -38,7 +38,7 @@ export function renderServices() {
   };
 
   return `
-    <div class="p-4 pb-28">
+    <div class="p-4 pb-10">
       ${section('Gastos fijos', fixed.length === 0 ? empty('Sin servicios fijos') : fixed.map(renderService).join(''))}
       ${section('Suscripciones / digitales', subs.length === 0 ? empty('Sin suscripciones') : subs.map(renderService).join(''))}
     </div>

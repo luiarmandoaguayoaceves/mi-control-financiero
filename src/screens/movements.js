@@ -27,7 +27,7 @@ export function renderMovements() {
   const income = monthIncome(data.transactions, state.month);
 
   return `
-    <div class="p-4 pb-28">
+    <div class="p-4 pb-10">
       ${monthNav(state.month, formatMonthKeyShort(state.month))}
 
       <div class="flex justify-between mb-3">

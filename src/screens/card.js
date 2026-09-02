@@ -31,7 +31,7 @@ export function renderCard() {
   const usoPct = card.creditLimit > 0 ? (card.currentBalance / card.creditLimit) * 100 : 0;
 
   return `
-    <div class="p-4 pb-28">
+    <div class="p-4 pb-10">
       ${section(card.name, `
         <div class="flex justify-between items-center">
           <span class="text-xs text-slate-500 dark:text-slate-400">${card.bank} · •••• Azul</span>

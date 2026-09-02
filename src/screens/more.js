@@ -12,7 +12,7 @@ const ITEMS = [
 
 export function renderMore() {
   return `
-    <div class="p-4 pb-28">
+    <div class="p-4 pb-10">
       ${ITEMS.map((item) => `
         <button data-action="goto" data-payload="${item.view}"
           class="w-full flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 mb-3 text-left active:scale-[0.99] active:bg-slate-50 dark:active:bg-slate-800/50">

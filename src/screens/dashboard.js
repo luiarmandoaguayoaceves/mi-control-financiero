@@ -77,7 +77,7 @@ export function renderDashboard() {
   const emPct = emergencia?.targetAmount ? (emergencia.currentAmount / emergencia.targetAmount) * 100 : 0;
 
   return `
-    <div class="p-4 pb-28">
+    <div class="p-4 pb-10">
       <div class="mb-4">
         <div class="text-xs text-slate-500 dark:text-slate-400">${formatDate(new Date().toISOString().slice(0, 10))}</div>
         <div class="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-1">Saldo disponible</div>

@@ -39,7 +39,7 @@ export function renderBudget() {
   const totalStatus = budgetStatus(totalPlanned, totalSpent);
 
   return `
-    <div class="p-4 pb-28">
+    <div class="p-4 pb-10">
       ${monthNav(month, formatMonthKeyShort(month))}
 
       ${section('Resumen', `
