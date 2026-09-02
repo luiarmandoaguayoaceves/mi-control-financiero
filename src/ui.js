@@ -13,6 +13,15 @@ export function esc(s) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Un clic que "sube" desde el contenido de un modal hasta el fondo
+ * (data-action="modal-backdrop") NO debe cerrar el modal: solo lo cierra
+ * un clic directo sobre el fondo. Devuelve true cuando hay que ignorarlo.
+ */
+export function shouldIgnoreBackdropClick(target, btn) {
+  return btn.dataset?.action === 'modal-backdrop' && target !== btn;
+}
+
 export function card(inner, extra = '') {
   return `<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm ${extra}">${inner}</div>`;
 }

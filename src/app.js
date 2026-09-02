@@ -15,7 +15,7 @@ import { renderAssets } from './screens/assets.js';
 import { renderReports } from './screens/reports.js';
 import { renderSettings } from './screens/settings.js';
 import { renderModal } from './screens/modals.js';
-import { txRow, empty as emptyHtml } from './ui.js';
+import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick } from './ui.js';
 import { THEME_KEY, STORAGE_KEY } from './models.js';
 import { todayISO, shiftMonthKey, parseAmount } from './format.js';
 
@@ -560,6 +560,9 @@ function defaultTxForm() {
 app.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
+  // El fondo del modal contiene al contenido: un clic en un campo/input
+  // del modal no debe cerrarlo. Solo cierra cuando el clic ES el fondo.
+  if (shouldIgnoreBackdropClick(e.target, btn)) return;
   e.preventDefault();
   handleAction(btn.dataset.action, btn.dataset.payload, btn);
 });

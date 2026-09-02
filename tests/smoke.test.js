@@ -27,7 +27,20 @@ const { renderReports } = await import('../src/screens/reports.js');
 const { renderSettings } = await import('../src/screens/settings.js');
 const { renderMore } = await import('../src/screens/more.js');
 const { renderModal } = await import('../src/screens/modals.js');
+const { shouldIgnoreBackdropClick } = await import('../src/ui.js');
 const { state } = await import('../src/screens/appState.js');
+
+test('modal: un clic en el contenido no cierra el modal (solo el fondo)', () => {
+  const backdrop = { dataset: { action: 'modal-backdrop' } };
+  const input = { tagName: 'INPUT' };
+  // Clic directo sobre el fondo -> se cierra (no se ignora)
+  assert.equal(shouldIgnoreBackdropClick(backdrop, backdrop), false);
+  // Clic que sube desde el input -> se ignora (no cierra)
+  assert.equal(shouldIgnoreBackdropClick(input, backdrop), true);
+  // Clic en un botón real (con su propio data-action) -> no es backdrop
+  const cancelBtn = { dataset: { action: 'modal-close' } };
+  assert.equal(shouldIgnoreBackdropClick(input, cancelBtn), false);
+});
 
 test('bootstrap: sin datos locales y sin archivo, persiste el seed', async () => {
   // fetch relativo no existe en Node -> cae al seed y lo persiste en localStorage
