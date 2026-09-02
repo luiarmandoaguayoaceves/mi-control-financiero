@@ -103,16 +103,22 @@ test('garantía: un despliegue nunca toca tus datos locales (localStorage preval
   assert.equal(emptyData().funds.find((f) => f.id === 'f-emergencia').currentAmount, 0);
 });
 
-test('aviso de instalación PWA: botón solo con beforeinstallprompt', () => {
-  assert.deepEqual(installPromptState({ deferred: true }), { showButton: true, showIosHint: false });
-  assert.deepEqual(installPromptState({ deferred: false }), { showButton: false, showIosHint: false });
-  assert.deepEqual(installPromptState({ deferred: true, hidden: true }), { showButton: false, showIosHint: false });
-  assert.deepEqual(installPromptState({ deferred: true, standalone: true }), { showButton: false, showIosHint: false });
-  assert.deepEqual(installPromptState({ isIOS: true }), { showButton: false, showIosHint: true });
+test('aviso de instalación PWA: siempre visible salvo instalado/descartado', () => {
+  // Con evento -> instalación directa
+  assert.deepEqual(installPromptState({ deferred: true }), { showButton: true, showIosHint: false, canPrompt: true });
+  // Sin evento (Chrome aún no lo dispara) -> botón con instrucciones
+  assert.deepEqual(installPromptState({}), { showButton: true, showIosHint: false, canPrompt: false });
+  // Descartado o ya instalado -> oculto
+  assert.deepEqual(installPromptState({ deferred: true, hidden: true }), { showButton: false, showIosHint: false, canPrompt: false });
+  assert.deepEqual(installPromptState({ deferred: true, standalone: true }), { showButton: false, showIosHint: false, canPrompt: false });
+  // iOS -> instrucciones
+  assert.deepEqual(installPromptState({ isIOS: true }), { showButton: false, showIosHint: true, canPrompt: false });
 });
 
 test('aviso de instalación PWA: render del banner', () => {
   assert.ok(installBannerHtml({ showButton: true }).includes('data-action="install-app"'));
+  assert.ok(installBannerHtml({ showButton: true, canPrompt: true }).includes('>Instalar<'));
+  assert.ok(installBannerHtml({ showButton: true, canPrompt: false }).includes('>Instalar app<'));
   assert.ok(installBannerHtml({ showIosHint: true }).includes('Agregar a pantalla de inicio'));
   assert.equal(installBannerHtml({}), '');
   assert.equal(installBannerHtml({ showButton: false, showIosHint: false }), '');
@@ -207,5 +213,14 @@ test('modal de nuevo movimiento renderiza el formulario', () => {
   assert.ok(html.includes('Nuevo movimiento'));
   assert.ok(html.includes('Monto'));
   assert.ok(html.includes('Compra con tarjeta de crédito'));
+  state.modal = null;
+});
+
+test('modal de ayuda de instalación renderiza las instrucciones', () => {
+  state.modal = { kind: 'installHelp' };
+  const html = renderModal();
+  assert.ok(html.includes('Instalar la app'));
+  assert.ok(html.includes('Agregar a pantalla de inicio'));
+  assert.ok(html.includes('Entendido'));
   state.modal = null;
 });

@@ -10,7 +10,8 @@ export function renderSettings() {
   return `
     <div class="p-4 pb-24">
       ${section('Datos', `
-        <button data-action="export-json" class="w-full bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98] mb-2">Exportar respaldo JSON</button>
+        <button data-action="install-app" class="w-full bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98] mb-2">Instalar la app en este dispositivo</button>
+        <button data-action="export-json" class="w-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl py-3 active:scale-[0.98] mb-2">Exportar respaldo JSON</button>
         <button data-action="import-json" class="w-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl py-3 active:scale-[0.98] mb-2">Importar respaldo JSON</button>
         <button data-action="edit-income" class="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl py-3 active:scale-[0.98] mb-1">
           Ingreso mensual estimado: ${data.settings.monthlyIncome ? money(data.settings.monthlyIncome) : 'no definido'}

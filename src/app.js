@@ -550,6 +550,10 @@ function handleAction(action, payload, el) {
           deferredInstallPrompt = null;
           render();
         });
+      } else {
+        // Chrome aún no emite el evento (o ya lo descartó): dar instrucciones
+        state.modal = { kind: 'installHelp' };
+        render();
       }
       break;
     case 'dismiss-install':

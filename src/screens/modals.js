@@ -226,6 +226,17 @@ export function renderModal() {
         { id: 'modal-income', label: 'Monto ($)', opts: { type: 'number', inputmode: 'decimal', value: data.settings.monthlyIncome ? String(data.settings.monthlyIncome) : '' } },
       ], 'Guardar', 'income-save');
 
+    case 'installHelp':
+      return modalShell(`
+        ${modalHeader('Instalar la app')}
+        <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          <p class="mb-2"><b>Android (Chrome):</b> toca el menú ⋮ arriba a la derecha → <b>Instalar aplicación</b> (o "Agregar a pantalla de inicio").</p>
+          <p class="mb-2"><b>iPhone/iPad (Safari):</b> botón Compartir → <b>Agregar a pantalla de inicio</b>.</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Si no ves la opción, recarga la página una vez más y espera unos segundos: el navegador habilita la instalación normalmente en la segunda visita.</p>
+        </div>
+        <button data-action="modal-close" class="w-full mt-4 bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98]">Entendido</button>
+      `);
+
     case 'confirm':
       return modalShell(`
         <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">${esc(modal.title)}</h3>

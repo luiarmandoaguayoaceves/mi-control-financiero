@@ -25,24 +25,25 @@ export function shouldIgnoreBackdropClick(target, btn) {
 /**
  * Decide si mostrar el aviso de instalación PWA.
  * - Oculto si ya se descartó o ya está instalada como standalone.
- * - Con evento beforeinstallprompt -> botón "Instalar".
+ * - En Android/desktop SIEMPRE visible (aunque Chrome aún no dispare
+ *   beforeinstallprompt): con evento -> instalación directa (canPrompt),
+ *   sin evento -> al tocar muestra instrucciones.
  * - iOS Safari (sin evento) -> instrucciones de "Agregar a pantalla de inicio".
  */
-export function installPromptState({ deferred = false, hidden = false, standalone = false, isIOS = false }) {
-  if (hidden || standalone) return { showButton: false, showIosHint: false };
-  if (deferred) return { showButton: true, showIosHint: false };
-  if (isIOS) return { showButton: false, showIosHint: true };
-  return { showButton: false, showIosHint: false };
+export function installPromptState({ deferred = false, hidden = false, standalone = false, isIOS = false } = {}) {
+  if (hidden || standalone) return { showButton: false, showIosHint: false, canPrompt: false };
+  if (isIOS) return { showButton: false, showIosHint: true, canPrompt: false };
+  return { showButton: true, showIosHint: false, canPrompt: deferred };
 }
 
-export function installBannerHtml({ showButton = false, showIosHint = false } = {}) {
+export function installBannerHtml({ showButton = false, showIosHint = false, canPrompt = false } = {}) {
   if (!showButton && !showIosHint) return '';
   const body = showButton
     ? `<div class="flex-1">
          <div class="text-sm font-bold">Instala Mi Control Financiero</div>
          <div class="text-xs opacity-80">Funciona offline, con su propio icono</div>
        </div>
-       <button data-action="install-app" class="bg-white text-indigo-700 font-bold text-xs px-3 py-2 rounded-lg active:scale-95">Instalar</button>`
+       <button data-action="install-app" class="bg-white text-indigo-700 font-bold text-xs px-3 py-2 rounded-lg active:scale-95">${canPrompt ? 'Instalar' : 'Instalar app'}</button>`
     : `<div class="flex-1">
          <div class="text-sm font-bold">Instala Mi Control Financiero</div>
          <div class="text-xs opacity-80">En Safari: Compartir → "Agregar a pantalla de inicio"</div>
