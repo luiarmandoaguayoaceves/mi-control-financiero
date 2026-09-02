@@ -31,13 +31,13 @@ npm start                  # usa npx serve -l 8080 .  (npx se descarga solo)
 | Capa | Qué es | Cuándo se usa |
 | --- | --- | --- |
 | `localStorage` | TUS datos (por navegador/dispositivo) | ÚNICA fuente de verdad en runtime |
-| `src/seed.js` | Datos iniciales de referencia | Solo en el primer arranque de un navegador que nunca ha guardado nada |
+| arranque vacío | Sin datos semilla | Un navegador que nunca ha guardado nada inicia VACÍO: solo categorías por defecto y cuentas/tarjeta en $0 |
 
 REGLAS (para que nunca pierdas tus actualizaciones):
 - **Un despliegue NUNCA toca tus datos**: el código que subes a Netlify solo se sirve; no escribe nada en tu almacenamiento. Puedes redesplegar mil veces y tus finanzas siguen igual.
 - **localStorage es por navegador**: lo que capturas en tu PC no aparece automáticamente en tu celular ni en otro navegador (son almacenes separados). Para mover datos: Configuración → **Exportar respaldo JSON** → en el otro dispositivo Configuración → **Importar respaldo JSON**.
 - **localhost y tu URL de Netlify son orígenes distintos**: cada uno tiene su propio localStorage.
-- Si alguna vez quieres volver a empezar: Configuración → Restablecer a datos iniciales (o borra los datos del sitio en el navegador).
+- Si alguna vez quieres volver a empezar: Configuración → "Borrar todos mis datos" (deja la app en vacío; exporta un respaldo antes).
 
 ## PWA (instalable, offline)
 
@@ -55,7 +55,7 @@ La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos gen
 | Comando | Qué hace |
 | --- | --- |
 | `npm start` | Sirve la app con `npx serve` en http://localhost:8080 |
-| `npm test` | 45 tests: lógica financiera, seed, contabilidad y smoke de pantallas |
+| `npm test` | 39 tests: lógica financiera, formato, contabilidad y smoke de pantallas |
 | `npm run css` | Recompila Tailwind v4 → `css/tailwind.css` (tras cambiar clases) |
 
 ## Estructura
@@ -73,8 +73,7 @@ src/
   models.js               modelos y constantes
   format.js               dinero MXN, fechas es-MX (puro)
   finance.js              lógica financiera PURA (testeada con node --test)
-  seed.js                 datos iniciales reales (25-ago-2026)
-  store.js                repositorio: localStorage (única fuente) + seed inicial
+  store.js                repositorio: localStorage (única fuente) + arranque vacío
   ui.js                   helpers de render (KPI, progress, chips, barras…)
   app.js                  arranque, router de hash, acciones, tema oscuro
   screens/                dashboard, movements, card, funds, services, goals,
@@ -84,29 +83,20 @@ tests/                    node --test (finance, seed, smoke)
 
 ## Decisiones importantes
 
-1. **JSON en el proyecto como base + localStorage como runtime**: única forma de que funcione en Netlify sin backend. `store.js` es la única puerta de escritura; migrar a IndexedDB o a un backend después no toca pantallas.
-2. **Saldos como verdad contable**: el seed se inserta ya conciliado; los movimientos NUEVOS ajustan saldos (gasto débito baja la cuenta, compra TDC sube la tarjeta, pago TDC baja ambas, ingreso a apartado sube el fondo).
-3. **Respaldo TDC = compras del ciclo posteriores al último pago**: con el seed, 3,177.45. Pago proyectado = respaldo + MSI del mes = **4,659.45** (dinámico).
-4. **MSI**: solo se respalda la mensualidad mensual, no el total. El saldo de la tarjeta (20,000.50) se muestra separado del pago requerido (parte es MSI futuro).
+1. **localStorage como única fuente** + arranque vacío (sin datos semilla): el código desplegado nunca escribe ni re-sembra datos; los deploys son inofensivos para tus finanzas. `store.js` es la única puerta de escritura; migrar a IndexedDB o a un backend después no toca pantallas.
+2. **Saldos como verdad contable**: los movimientos ajustan saldos automáticamente (gasto débito baja la cuenta, compra TDC sube la tarjeta, pago TDC baja ambas, ingreso a apartado sube el fondo).
+3. **Respaldo TDC = compras del ciclo posteriores al último pago**: pago proyectado = respaldo + MSI del mes (dinámico).
+4. **MSI**: solo se respalda la mensualidad mensual, no el total. El saldo de la tarjeta se muestra separado del pago requerido (parte es MSI futuro).
 5. **Tailwind compilado** (no CDN): funciona offline y en Netlify sin pasos extra.
 6. **Modo oscuro** por clase `.dark` en `<html>`: sigue al sistema por defecto, con toggle manual (persistido).
 7. **Gráficas CSS puras** (sin librerías).
 8. **ES Modules**: requiere servirlo por HTTP (`npm start`), no `file://`.
 
-## Números del seed (25-ago-2026)
+## Arranque
 
-| Concepto | Valor |
-| --- | --- |
-| Nómina BBVA | 12,074.73 |
-| Apartados | 16,401 (10,000 protegidos) |
-| Fondo emergencia | 4,000 / meta 39,000 |
-| TDC BBVA Azul | 20,000.50 usados · línea 111,700 · corte día 12 · 268 pts |
-| MSI activos | Emma 336 + Refri 628 + Lavasecadora 518 = 1,482/mes |
-| Compras del ciclo (sin respaldar) | 3,177.45 |
-| Pago proyectado próximo corte | 4,659.45 |
-| Patrimonio neto | 5,925.50 (incluye moto estimada 45,000) |
+La app inicia VACÍA (sin datos semilla): solo categorías por defecto y cuentas/tarjeta en $0. Tú capturas tus saldos, movimientos, apartados y metas desde cero (o importas un respaldo JSON). No hay datos de "origen" que puedan reaparecer.
 
-> El "dinero libre" sale negativo con los datos iniciales porque los apartados (16,401) superan el saldo (12,074.73): es la consecuencia honesta de la fórmula; se normaliza al registrar ingresos o ajustar saldos.
+> Referencia (datos reales al 25-ago-2026, ya no viven en la app): Nómina BBVA 12,074.73 · apartados 16,401 (10,000 protegidos) · TDC 20,000.50 de 111,700 (corte día 12) · MSI 1,482/mes · compras del ciclo 3,177.45 · pago proyectado 4,659.45 · patrimonio 5,925.50.
 
 ## Pendientes v2
 

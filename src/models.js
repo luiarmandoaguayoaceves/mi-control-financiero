@@ -53,3 +53,34 @@ export const TRANSACTION_TYPE_LABELS = {
 export const APP_DATA_VERSION = 1;
 export const STORAGE_KEY = 'mcf_app_data_v1';
 export const THEME_KEY = 'mcf_theme';
+
+/**
+ * Categorías por defecto (estructura de diseño, no son datos financieros).
+ * Se crean en el arranque vacío porque la app no tiene aún pantalla
+ * para crear categorías.
+ */
+export const DEFAULT_CATEGORIES = [
+  { id: CATEGORY_IDS.renta, name: 'Renta', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.agua, name: 'Agua', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.luz, name: 'Luz', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.gas, name: 'Gas', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.internet, name: 'Internet', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.telefono, name: 'Teléfono', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.suscripciones, name: 'Suscripciones', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.despensa, name: 'Despensa', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.comidaFuera, name: 'Comida fuera', group: 'Deseo', active: true },
+  { id: CATEGORY_IDS.gasolina, name: 'Gasolina', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.motoMantenimiento, name: 'Moto mantenimiento', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.motoSeguro, name: 'Moto seguro', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.motoTramites, name: 'Moto trámites', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.hogar, name: 'Hogar', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.equiparDepa, name: 'Equipar depa', group: 'Deseo', active: true },
+  { id: CATEGORY_IDS.diversion, name: 'Diversión', group: 'Deseo', active: true },
+  { id: CATEGORY_IDS.viajes, name: 'Viajes', group: 'Deseo', active: true },
+  { id: CATEGORY_IDS.salud, name: 'Salud', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.tdcPago, name: 'TDC pago', group: 'Deuda/Pago', active: true },
+  { id: CATEGORY_IDS.ahorro, name: 'Ahorro', group: 'Ahorro/Inversión', active: true },
+  { id: CATEGORY_IDS.inversion, name: 'Inversión', group: 'Ahorro/Inversión', active: true },
+  { id: CATEGORY_IDS.otros, name: 'Otros', group: 'Necesidad', active: true },
+  { id: CATEGORY_IDS.ingreso, name: 'Ingreso', group: 'Ingreso', active: true },
+];

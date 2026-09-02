@@ -2,11 +2,12 @@
 // Repositorio de datos: única puerta de escritura.
 // localStorage es la ÚNICA fuente de verdad en runtime (per-navegador/
 // per-dispositivo). Los despliegues (Netlify, git) NUNCA tocan estos datos.
+// Sin datos semilla: un navegador que nunca ha guardado nada arranca VACÍO
+// (solo categorías por defecto y cuentas/tarjeta en $0).
 // Para mover datos entre dispositivos: Configuración → Exportar JSON →
-// Importar JSON en el otro dispositivo (no hay carga automática de archivos).
+// Importar JSON en el otro dispositivo.
 // ============================================================
-import { STORAGE_KEY, APP_DATA_VERSION } from './models.js';
-import { buildSeedData } from './seed.js';
+import { STORAGE_KEY, APP_DATA_VERSION, DEFAULT_CATEGORIES } from './models.js';
 import { todayISO, toMonthKey, round2 } from './format.js';
 import { availableBalance, protectedFundsTotal, totalCardDebt, msiPendingTotal, buildSnapshot } from './finance.js';
 
@@ -39,8 +40,45 @@ function persist(data) {
 }
 
 /**
+ * Estado inicial VACÍO: sin datos financieros (ni movimientos, ni saldos,
+ * ni MSI, ni metas). Solo la estructura que la app necesita para funcionar:
+ * categorías por defecto y cuentas/tarjeta en $0.
+ */
+export function emptyData() {
+  return {
+    version: APP_DATA_VERSION,
+    settings: { currency: 'MXN' },
+    accounts: [
+      { id: 'acc-nomina', name: 'Nómina BBVA', institution: 'BBVA', type: 'debit', balance: 0, active: true, notes: 'Ajusta tu saldo en Configuración' },
+      { id: 'acc-efectivo', name: 'Efectivo', institution: '', type: 'cash', balance: 0, active: true },
+      { id: 'acc-tdc-azul', name: 'Tarjeta BBVA Azul', institution: 'BBVA', type: 'credit', balance: 0, creditLimit: 111700, availableCredit: 111700, active: true },
+    ],
+    creditCards: [
+      { id: 'cc-azul', name: 'Tarjeta BBVA Azul', bank: 'BBVA', creditLimit: 111700, currentBalance: 0, cutDay: 12, currentNoInterestPayment: 0, availableCredit: 111700, points: 0, active: true },
+    ],
+    categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
+    funds: [
+      { id: 'f-renta', name: 'Renta', currentAmount: 0, protected: true, active: true, purpose: 'Renta mensual' },
+      { id: 'f-emergencia', name: 'Fondo de emergencia', currentAmount: 0, protected: true, active: true, purpose: 'Respaldo ante imprevistos (no se toca)' },
+      { id: 'f-servicios', name: 'Servicios', currentAmount: 0, protected: true, active: true, purpose: 'Agua, luz, gas, internet, teléfono' },
+      { id: 'f-mensualidades', name: 'Mensualidades', currentAmount: 0, protected: true, active: true, purpose: 'MSI TDC' },
+      { id: 'f-equip-depa', name: 'Equip depa', currentAmount: 0, protected: false, active: true, purpose: 'Equipar el departamento' },
+      { id: 'f-pagos-tdc', name: 'Pagos TDC', currentAmount: 0, protected: true, active: true, purpose: 'Respaldo de compras con tarjeta' },
+    ],
+    installmentPurchases: [],
+    services: [],
+    goals: [],
+    budgets: [],
+    transactions: [],
+    assets: [],
+    liabilities: [],
+    snapshots: [],
+  };
+}
+
+/**
  * Carga síncrona: tus datos de localStorage o, si nunca has guardado nada
- * en ESTE navegador, el seed inicial (solo como primer arranque).
+ * en ESTE navegador, un estado vacío (sin datos semilla).
  */
 export function load() {
   if (cache) return cache;
@@ -51,9 +89,9 @@ export function load() {
       return cache;
     }
   } catch (e) {
-    console.warn('Datos locales corruptos, se re-sembrará', e);
+    console.warn('Datos locales corruptos, se reinicia en vacío', e);
   }
-  cache = buildSeedData();
+  cache = emptyData();
   return cache;
 }
 
@@ -263,9 +301,9 @@ export function exportJSON() {
 }
 
 export function resetData() {
-  const seed = buildSeedData();
-  persist(seed);
-  return seed;
+  const empty = emptyData();
+  persist(empty);
+  return empty;
 }
 
 export function getData() {

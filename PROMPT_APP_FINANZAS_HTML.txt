@@ -60,12 +60,14 @@ Crear los mismos modelos (como objetos/constantes en `src/models.js`):
 
 PERSISTENCIA (v1)
 - `localStorage` (llave `mcf_app_data_v1`) como ÚNICA fuente de verdad en runtime: funciona en un hosting estático como Netlify y los despliegues NUNCA tocan estos datos.
-- Datos iniciales en `src/seed.js` (mi información real, abajo): se usan solo en el primer arranque de un navegador que nunca ha guardado nada.
+- SIN datos semilla: un navegador que nunca ha guardado nada arranca VACÍO (solo categorías por defecto y cuentas/tarjeta en $0). El usuario captura todo desde cero o importa un respaldo JSON.
 - Para mover datos entre dispositivos/navegadores (son almacenes separados): Configuración → Exportar respaldo JSON → Importar respaldo JSON en el otro.
 - Capa `src/store.js`: ÚNICA puerta de escritura (load/persist + acciones CRUD + efecto contable). Las pantallas jamás tocan localStorage directo.
 - Lógica financiera pura en `src/finance.js` (sin tocar el DOM): funciones puras, probadas con `node --test` en `tests/`.
 
-DATOS INICIALES / SEED (idénticos a mi información real)
+DATOS DE REFERENCIA (NO se insertan automáticamente; son la información real del usuario, útil para capturarla manualmente o como fixture de pruebas):
+
+DATOS INICIALES / SEED (REFERENCIA)
 
 CUENTA BBVA NÓMINA
 - nombre: Nómina BBVA, tipo: debit, saldo: 12074.73 MXN, referencia: 25 agosto 2026
@@ -177,8 +179,8 @@ ENTREGABLE DE ESTA EJECUCIÓN
 
 NO me des solamente instrucciones. TRABAJA EN EL PROYECTO:
 1. Borra cualquier proyecto anterior en el directorio y crea la estructura nueva.
-2. Implementa models.js, format.js, finance.js (con tests primero: node --test, RED → GREEN), seed.js, store.js.
-3. Inserta los datos seed con mi información real (primer arranque en navegadores sin datos).
+2. Implementa models.js, format.js, finance.js (con tests primero: node --test, RED → GREEN), store.js.
+3. NO insertes datos semilla: la app arranca en VACÍO (solo categorías por defecto y cuentas/tarjeta en $0). Los datos de referencia quedan como documentación/fixture de pruebas, nunca se cargan automáticamente.
 4. Construye las 11 pantallas funcionales + navegación de pestañas.
 5. Compila Tailwind a css/tailwind.css (sin CDN).
 6. Edición y borrado de movimientos, exportar/importar JSON (respaldo manual y migración entre dispositivos).

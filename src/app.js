@@ -529,7 +529,7 @@ function handleAction(action, payload, el) {
       break;
     }
     case 'reset-data':
-      openConfirm('Restablecer datos', 'Se borrarán todos tus datos y volverán los iniciales. Esta acción no se puede deshacer.', 'confirm-reset');
+      openConfirm('Borrar todos mis datos', 'Se borrarán TODOS tus datos (movimientos, saldos, apartados, metas). Esta acción no se puede deshacer; solo quedan las categorías por defecto. Exporta un respaldo antes si tienes dudas.', 'confirm-reset');
       break;
     case 'confirm-reset':
       store.data = resetData();

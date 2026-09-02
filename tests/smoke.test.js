@@ -1,5 +1,6 @@
 // Smoke test: renderiza todas las pantallas (con stub de navegador) y
 // verifica la contabilidad de extremo a extremo sin necesitar un browser.
+// La app NO tiene datos semilla: los tests usan un fixture propio.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -11,9 +12,53 @@ globalThis.localStorage = {
   removeItem: (k) => mem.delete(k),
 };
 
-const { load, addTransaction, deleteTransaction, getData, fundMovement } = await import('../src/store.js');
+import { todayISO, addDaysISO } from '../src/format.js';
+import { currentCycleRange } from '../src/finance.js';
+
+/** Fecha dentro del ciclo de corte actual (día 1 después del corte). */
+const CYCLE_TX_DATE = addDaysISO(currentCycleRange(12, new Date()).start, 1);
+
+/** Fixture de prueba: datos con los mismos ids que usan las acciones. */
+function makeFixture() {
+  return {
+    version: 1,
+    settings: { currency: 'MXN' },
+    accounts: [
+      { id: 'acc-nomina', name: 'Nómina BBVA', institution: 'BBVA', type: 'debit', balance: 12074.73, active: true },
+      { id: 'acc-tdc-azul', name: 'Tarjeta BBVA Azul', institution: 'BBVA', type: 'credit', balance: 20000.5, creditLimit: 111700, availableCredit: 91699.5, active: true },
+    ],
+    creditCards: [
+      { id: 'cc-azul', name: 'Tarjeta BBVA Azul', bank: 'BBVA', creditLimit: 111700, currentBalance: 20000.5, cutDay: 12, currentNoInterestPayment: 0, availableCredit: 91699.5, points: 268, active: true },
+    ],
+    categories: [
+      { id: 'cat-despensa', name: 'Despensa', group: 'Necesidad', active: true },
+      { id: 'cat-suscripciones', name: 'Suscripciones', group: 'Necesidad', active: true },
+      { id: 'cat-renta', name: 'Renta', group: 'Necesidad', active: true },
+      { id: 'cat-ingreso', name: 'Ingreso', group: 'Ingreso', active: true },
+      { id: 'cat-tdc-pago', name: 'TDC pago', group: 'Deuda/Pago', active: true },
+      { id: 'cat-otros', name: 'Otros', group: 'Necesidad', active: true },
+    ],
+    funds: [
+      { id: 'f-emergencia', name: 'Fondo de emergencia', currentAmount: 4000, targetAmount: 39000, protected: true, active: true },
+      { id: 'f-renta', name: 'Renta', currentAmount: 2500, protected: true, active: true },
+    ],
+    installmentPurchases: [],
+    services: [],
+    goals: [],
+    budgets: [],
+    transactions: [
+      { id: 'tx-test-1', date: CYCLE_TX_DATE, description: 'ChatGPT', amount: 399, type: 'expense', categoryId: 'cat-suscripciones', paymentMethod: 'Tarjeta', accountId: 'acc-tdc-azul', isCreditCardPurchase: true, isPending: false, createdAt: '', updatedAt: '' },
+    ],
+    assets: [],
+    liabilities: [],
+    snapshots: [],
+  };
+}
+
+mem.set('mcf_app_data_v1', JSON.stringify(makeFixture()));
+
+const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
-const { buildSeedData } = await import('../src/seed.js');
 store.data = load();
 
 const { renderDashboard } = await import('../src/screens/dashboard.js');
@@ -30,6 +75,33 @@ const { renderMore } = await import('../src/screens/more.js');
 const { renderModal } = await import('../src/screens/modals.js');
 const { shouldIgnoreBackdropClick, installPromptState, installBannerHtml } = await import('../src/ui.js');
 const { state } = await import('../src/screens/appState.js');
+
+test('arranque vacío: la app NO tiene datos semilla', () => {
+  const empty = emptyData();
+  assert.equal(empty.transactions.length, 0, 'sin movimientos');
+  assert.equal(empty.services.length, 0);
+  assert.equal(empty.goals.length, 0);
+  assert.equal(empty.budgets.length, 0);
+  assert.equal(empty.assets.length, 0);
+  assert.equal(empty.snapshots.length, 0);
+  assert.equal(empty.accounts.length, 3, 'solo estructura de cuentas');
+  assert.ok(empty.accounts.every((a) => a.balance === 0), 'cuentas en $0');
+  assert.equal(empty.categories.length, 23, 'categorías por defecto (la app las necesita)');
+  assert.ok(empty.funds.every((f) => f.currentAmount === 0), 'apartados en $0');
+});
+
+test('garantía: un despliegue nunca toca tus datos locales (localStorage prevalece)', () => {
+  // Simula que el usuario modificó datos (fondo de emergencia 4000 -> 4500)
+  const modified = makeFixture();
+  modified.funds = modified.funds.map((f) =>
+    f.id === 'f-emergencia' ? { ...f, currentAmount: 4500 } : f,
+  );
+  mem.set('mcf_app_data_v1', JSON.stringify(modified));
+  const loaded = JSON.parse(mem.get('mcf_app_data_v1'));
+  assert.equal(loaded.funds.find((f) => f.id === 'f-emergencia').currentAmount, 4500);
+  // El arranque vacío tiene $0: no se re-aplica sobre datos guardados
+  assert.equal(emptyData().funds.find((f) => f.id === 'f-emergencia').currentAmount, 0);
+});
 
 test('aviso de instalación PWA: botón solo con beforeinstallprompt', () => {
   assert.deepEqual(installPromptState({ deferred: true }), { showButton: true, showIosHint: false });
@@ -49,50 +121,34 @@ test('aviso de instalación PWA: render del banner', () => {
 test('modal: un clic en el contenido no cierra el modal (solo el fondo)', () => {
   const backdrop = { dataset: { action: 'modal-backdrop' } };
   const input = { tagName: 'INPUT' };
-  // Clic directo sobre el fondo -> se cierra (no se ignora)
   assert.equal(shouldIgnoreBackdropClick(backdrop, backdrop), false);
-  // Clic que sube desde el input -> se ignora (no cierra)
   assert.equal(shouldIgnoreBackdropClick(input, backdrop), true);
-  // Clic en un botón real (con su propio data-action) -> no es backdrop
   const cancelBtn = { dataset: { action: 'modal-close' } };
   assert.equal(shouldIgnoreBackdropClick(input, cancelBtn), false);
 });
 
-test('garantía: un despliegue nunca toca tus datos locales (localStorage prevalece)', () => {
-  // Simula que el usuario modificó datos (fondo de emergencia 4000 -> 4500)
-  // y que localStorage ya los tiene guardados
-  const seed = buildSeedData();
-  seed.funds = seed.funds.map((f) =>
-    f.id === 'f-emergencia' ? { ...f, currentAmount: 4500 } : f,
-  );
-  mem.set('mcf_app_data_v1', JSON.stringify(seed));
-  const loaded = JSON.parse(mem.get('mcf_app_data_v1'));
-  assert.equal(loaded.funds.find((f) => f.id === 'f-emergencia').currentAmount, 4500);
-  // El seed original (primer arranque) sigue siendo 4000: no se re-aplica
-  assert.equal(buildSeedData().funds.find((f) => f.id === 'f-emergencia').currentAmount, 4000);
-});
-
-test('dashboard renderiza el saldo real del seed', () => {
+test('dashboard renderiza saldo, dinero libre y alerta de respaldo TDC', () => {
   const html = renderDashboard();
-  assert.ok(html.includes('$12,074.73'), 'debe mostrar el saldo de nómina');
-  assert.ok(html.includes('Dinero libre real'), 'debe mostrar dinero libre');
-  assert.ok(html.includes('TDC sin respaldar'), 'debe alertar el respaldo pendiente');
-  assert.ok(html.includes('$4,659.45'), 'pago proyectado 4659.45');
+  assert.ok(html.includes('$12,074.73'), 'saldo de la cuenta');
+  assert.ok(html.includes('Dinero libre real'), 'dinero libre');
+  assert.ok(html.includes('TDC sin respaldar'), 'alerta de respaldo pendiente');
+  assert.ok(html.includes('$399.00'), 'pago proyectado = respaldo 399 + MSI 0');
+  assert.ok(html.includes('$6,500.00'), 'total apartados del fixture');
 });
 
-test('tarjeta muestra línea, saldo, MSI y pago proyectado', () => {
+test('tarjeta muestra línea, saldo y estado vacío de MSI', () => {
   const html = renderCard();
   assert.ok(html.includes('$111,700'), 'línea de crédito');
   assert.ok(html.includes('$20,000.50'), 'saldo utilizado');
-  assert.ok(html.includes('$1,482.00'), 'MSI mensuales');
-  assert.ok(html.includes('Emma Sleep'), 'compra MSI');
-  assert.ok(html.includes('MSI futuros'), 'nota de que el saldo no es el pago');
+  assert.ok(html.includes('$0.00'), 'MSI mensuales en cero');
+  assert.ok(html.includes('Sin compras MSI activas'), 'sin MSI registrados');
+  assert.ok(html.includes('MSI futuros'), 'nota: el saldo no es el pago requerido');
 });
 
-test('apartados muestran total 16401 y protegidos 10000', () => {
+test('apartados muestran total y protegidos del fixture', () => {
   const html = renderFunds();
-  assert.ok(html.includes('$16,401.00'));
-  assert.ok(html.includes('$10,000.00 protegidos'));
+  assert.ok(html.includes('$6,500.00'));
+  assert.ok(html.includes('$6,500.00 protegidos'));
 });
 
 test('todas las pantallas renderizan sin excepciones', () => {
@@ -115,7 +171,7 @@ test('todas las pantallas renderizan sin excepciones', () => {
 test('contabilidad: gasto con débito baja el saldo y se revierte al borrar', () => {
   const before = getData().accounts.find((a) => a.id === 'acc-nomina').balance;
   const tx = addTransaction({
-    date: '2026-09-01', description: 'Prueba débito', amount: 100,
+    date: todayISO(), description: 'Prueba débito', amount: 100,
     type: 'expense', categoryId: 'cat-despensa', paymentMethod: 'Débito',
     accountId: 'acc-nomina', isCreditCardPurchase: false, isPending: false,
   });
@@ -129,7 +185,7 @@ test('contabilidad: gasto con débito baja el saldo y se revierte al borrar', ()
 test('contabilidad: compra TDC sube el saldo de la tarjeta', () => {
   const before = getData().creditCards.find((c) => c.id === 'cc-azul').currentBalance;
   const tx = addTransaction({
-    date: '2026-09-01', description: 'Prueba TDC', amount: 600,
+    date: todayISO(), description: 'Prueba TDC', amount: 600,
     type: 'expense', categoryId: 'cat-despensa', paymentMethod: 'Tarjeta',
     accountId: 'acc-tdc-azul', isCreditCardPurchase: true, isPending: false,
   });
@@ -146,7 +202,7 @@ test('contabilidad: ingreso a apartado incrementa el fondo', () => {
 });
 
 test('modal de nuevo movimiento renderiza el formulario', () => {
-  state.modal = { kind: 'newTx', form: { type: 'expense', date: '2026-09-01', description: '', amount: '', categoryId: 'cat-despensa', paymentMethod: 'Tarjeta', accountId: 'acc-nomina', toAccountId: '', fundId: '', isTdc: false, isPending: false, notes: '' } };
+  state.modal = { kind: 'newTx', form: { type: 'expense', date: todayISO(), description: '', amount: '', categoryId: 'cat-despensa', paymentMethod: 'Tarjeta', accountId: 'acc-nomina', toAccountId: '', fundId: '', isTdc: false, isPending: false, notes: '' } };
   const html = renderModal();
   assert.ok(html.includes('Nuevo movimiento'));
   assert.ok(html.includes('Monto'));

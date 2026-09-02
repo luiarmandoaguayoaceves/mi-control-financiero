@@ -53,7 +53,8 @@ export function renderSettings() {
       `).join(''))}
 
       ${section('Zona de riesgo', `
-        <button data-action="reset-data" class="w-full bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3 active:scale-[0.98]">Restablecer a datos iniciales</button>
+        <button data-action="reset-data" class="w-full bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3 active:scale-[0.98]">Borrar todos mis datos</button>
+        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Borra TODO y deja la app en vacío (solo categorías). Exporta un respaldo antes.</div>
       `)}
 
       ${section('Seguridad', `
