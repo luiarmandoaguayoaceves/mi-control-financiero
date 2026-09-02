@@ -56,8 +56,14 @@ function setHash(view) {
 
 // ---------- Render ----------
 
-function viewHtml() {
-  switch (state.view) {
+const TAB_VIEWS = ['dashboard', 'movements', 'card', 'funds', 'more'];
+
+function currentIndex() {
+  return Math.max(0, TAB_VIEWS.indexOf(state.view));
+}
+
+function viewHtmlFor(view) {
+  switch (view) {
     case 'movements': return renderMovements();
     case 'card': return renderCard();
     case 'funds': return renderFunds();
@@ -73,6 +79,19 @@ function viewHtml() {
       }
     default: return renderDashboard();
   }
+}
+
+/** Track del carrusel: las 5 vistas en fila, cada una con scroll propio. */
+function pagerHtml() {
+  const index = currentIndex();
+  return `
+    <div id="pager" class="h-full flex touch-pan-y transition-transform duration-300 ease-out will-change-transform"
+         style="transform: translateX(-${index * 100}%)">
+      ${TAB_VIEWS.map((v) => `
+        <section data-panel="${v}" class="w-full h-full overflow-y-auto shrink-0 no-scrollbar">${viewHtmlFor(v)}</section>
+      `).join('')}
+    </div>
+  `;
 }
 
 function navHtml() {
@@ -138,20 +157,61 @@ function toastHtml() {
   `;
 }
 
+const panelScrolls = {};
+
 function render() {
   if (!store.data) return;
   app.innerHTML = `
     ${headerHtml()}
-    <main class="flex-1">${installBannerHtml(installPromptState({
+    ${installBannerHtml(installPromptState({
       deferred: !!deferredInstallPrompt,
       hidden: localStorage.getItem(INSTALL_HIDDEN_KEY) === '1',
       standalone: isStandalone(),
       isIOS: isIOSDevice(),
-    }))}${viewHtml()}</main>
+    }))}
+    <main class="flex-1 overflow-hidden relative">${pagerHtml()}</main>
     ${navHtml()}
     ${renderModal()}
     ${toastHtml()}
   `;
+  // Preserva el scroll vertical de cada panel del carrusel
+  document.querySelectorAll('[data-panel]').forEach((el) => {
+    el.scrollTop = panelScrolls[el.dataset.panel] || 0;
+    el.addEventListener('scroll', () => {
+      panelScrolls[el.dataset.panel] = el.scrollTop;
+    }, { passive: true });
+  });
+}
+
+/** Navega entre pestañas con animación de carrusel. */
+let pagerBusy = false;
+
+function goTab(index) {
+  const tabs = TAB_VIEWS;
+  const clamped = Math.max(0, Math.min(tabs.length - 1, index));
+  const current = currentIndex();
+  if (clamped === current) {
+    // Tocar la pestaña activa "Más" vuelve al menú raíz
+    if (state.view === 'more' && state.moreView !== 'menu') {
+      state.moreView = 'menu';
+      setHash('more');
+      render();
+    }
+    return;
+  }
+  if (pagerBusy) return;
+  pagerBusy = true;
+  const track = document.getElementById('pager');
+  if (track) {
+    track.style.transform = `translateX(-${clamped * 100}%)`;
+  }
+  state.view = tabs[clamped];
+  if (state.view === 'more') state.moreView = 'menu';
+  setHash(state.view);
+  window.setTimeout(() => {
+    pagerBusy = false;
+    render();
+  }, 320);
 }
 
 function showToast(msg) {
@@ -260,10 +320,7 @@ function onImportFile(file) {
 function handleAction(action, payload, el) {
   switch (action) {
     case 'nav':
-      state.view = payload;
-      // Tocar la pestaña "Más" siempre vuelve al menú raíz
-      if (payload === 'more') state.moreView = 'menu';
-      setHash(payload);
+      goTab(TAB_VIEWS.indexOf(payload));
       break;
     case 'more-back':
       state.moreView = 'menu';
@@ -584,9 +641,40 @@ function defaultTxForm() {
   };
 }
 
+// ---------- Gestos: deslizar a los lados cambia de pestaña (carrusel) ----------
+
+let dragStart = null;
+let suppressClick = false;
+
+app.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#pager')) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  dragStart = { x: e.clientX, y: e.clientY, id: e.pointerId };
+});
+
+app.addEventListener('pointerup', (e) => {
+  if (!dragStart || e.pointerId !== dragStart.id) return;
+  const dx = e.clientX - dragStart.x;
+  const dy = e.clientY - dragStart.y;
+  dragStart = null;
+  // Umbral: 60px horizontales, y que no sea scroll vertical
+  if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 1.2) return;
+  suppressClick = true;
+  if (dx < 0) goTab(currentIndex() + 1);
+  else goTab(currentIndex() - 1);
+});
+
+app.addEventListener('pointercancel', () => {
+  dragStart = null;
+});
+
 // ---------- Eventos ----------
 
 app.addEventListener('click', (e) => {
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   // El fondo del modal contiene al contenido: un clic en un campo/input
@@ -673,6 +761,8 @@ window.addEventListener('appinstalled', () => {
 
 window.addEventListener('hashchange', () => {
   parseHash();
+  // Si hay una animación de carrusel en curso, goTab hace el render al terminar
+  if (pagerBusy) return;
   render();
 });
 

@@ -47,6 +47,7 @@ La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos gen
 
 - **Instalar en Android**: al abrir la app verás un banner "Instala Mi Control Financiero" con botón **Instalar** (usa `beforeinstallprompt`); también puedes desde Chrome → menú ⋮ → "Instalar aplicación". Si lo descartas con ×, ya no vuelve a aparecer; si lo instalas, desaparece para siempre.
 - **En iOS Safari**: el banner muestra la instrucción Compartir → "Agregar a pantalla de inicio" (iOS no permite instalación automática).
+- **Navegación por carrusel**: desliza a la izquierda o derecha sobre el contenido para cambiar entre Inicio → Movimientos → Tarjeta → Apartados → Más (también funciona con el mouse arrastrando). Las pestañas del menú inferior y el botón "atrás" de Android siguen funcionando; el scroll vertical de cada vista se conserva al cambiar de pestaña.
 - **Offline**: el service worker cachea toda la app (CSS, JS e iconos). Sin red funciona igual; tus datos viven en localStorage.
 - **Estrategia de caché**: páginas son network-first (los deploys llegan); el resto es cache-first con actualización en segundo plano. Tus datos (localStorage) nunca pasan por el service worker.
 - **Actualizar la app**: Netlify tiene `Cache-Control: no-cache` para `/sw.js` y `/src/*` (ver `netlify.toml`); al publicar cambios, sube `CACHE_VERSION` en `sw.js` si cambiaste la lista de archivos precacheados.
