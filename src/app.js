@@ -15,7 +15,7 @@ import { renderAssets } from './screens/assets.js';
 import { renderReports } from './screens/reports.js';
 import { renderSettings } from './screens/settings.js';
 import { renderModal } from './screens/modals.js';
-import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick } from './ui.js';
+import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick, installPromptState, installBannerHtml } from './ui.js';
 import { THEME_KEY, STORAGE_KEY } from './models.js';
 import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero } from './format.js';
 
@@ -142,7 +142,12 @@ function render() {
   if (!store.data) return;
   app.innerHTML = `
     ${headerHtml()}
-    <main class="flex-1">${viewHtml()}</main>
+    <main class="flex-1">${installBannerHtml(installPromptState({
+      deferred: !!deferredInstallPrompt,
+      hidden: localStorage.getItem(INSTALL_HIDDEN_KEY) === '1',
+      standalone: isStandalone(),
+      isIOS: isIOSDevice(),
+    }))}${viewHtml()}</main>
     ${navHtml()}
     ${renderModal()}
     ${toastHtml()}
@@ -538,6 +543,19 @@ function handleAction(action, payload, el) {
       localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
       render();
       break;
+    case 'install-app':
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.finally(() => {
+          deferredInstallPrompt = null;
+          render();
+        });
+      }
+      break;
+    case 'dismiss-install':
+      localStorage.setItem(INSTALL_HIDDEN_KEY, '1');
+      render();
+      break;
     default:
       break;
   }
@@ -617,6 +635,35 @@ if ('serviceWorker' in navigator) {
       .catch((e) => console.warn('Service worker no registrado', e));
   });
 }
+
+// ---------- PWA: aviso de instalación dentro de la app ----------
+
+const INSTALL_HIDDEN_KEY = 'mcf_install_hidden';
+let deferredInstallPrompt = null;
+
+function isStandalone() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    navigator.standalone === true
+  );
+}
+
+function isIOSDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  render();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  localStorage.setItem(INSTALL_HIDDEN_KEY, '1');
+  render();
+});
 
 // ---------- Arranque ----------
 

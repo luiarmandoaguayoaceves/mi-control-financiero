@@ -27,8 +27,23 @@ const { renderReports } = await import('../src/screens/reports.js');
 const { renderSettings } = await import('../src/screens/settings.js');
 const { renderMore } = await import('../src/screens/more.js');
 const { renderModal } = await import('../src/screens/modals.js');
-const { shouldIgnoreBackdropClick } = await import('../src/ui.js');
+const { shouldIgnoreBackdropClick, installPromptState, installBannerHtml } = await import('../src/ui.js');
 const { state } = await import('../src/screens/appState.js');
+
+test('aviso de instalación PWA: botón solo con beforeinstallprompt', () => {
+  assert.deepEqual(installPromptState({ deferred: true }), { showButton: true, showIosHint: false });
+  assert.deepEqual(installPromptState({ deferred: false }), { showButton: false, showIosHint: false });
+  assert.deepEqual(installPromptState({ deferred: true, hidden: true }), { showButton: false, showIosHint: false });
+  assert.deepEqual(installPromptState({ deferred: true, standalone: true }), { showButton: false, showIosHint: false });
+  assert.deepEqual(installPromptState({ isIOS: true }), { showButton: false, showIosHint: true });
+});
+
+test('aviso de instalación PWA: render del banner', () => {
+  assert.ok(installBannerHtml({ showButton: true }).includes('data-action="install-app"'));
+  assert.ok(installBannerHtml({ showIosHint: true }).includes('Agregar a pantalla de inicio'));
+  assert.equal(installBannerHtml({}), '');
+  assert.equal(installBannerHtml({ showButton: false, showIosHint: false }), '');
+});
 
 test('modal: un clic en el contenido no cierra el modal (solo el fondo)', () => {
   const backdrop = { dataset: { action: 'modal-backdrop' } };

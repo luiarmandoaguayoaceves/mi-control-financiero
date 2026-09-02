@@ -22,6 +22,39 @@ export function shouldIgnoreBackdropClick(target, btn) {
   return btn.dataset?.action === 'modal-backdrop' && target !== btn;
 }
 
+/**
+ * Decide si mostrar el aviso de instalación PWA.
+ * - Oculto si ya se descartó o ya está instalada como standalone.
+ * - Con evento beforeinstallprompt -> botón "Instalar".
+ * - iOS Safari (sin evento) -> instrucciones de "Agregar a pantalla de inicio".
+ */
+export function installPromptState({ deferred = false, hidden = false, standalone = false, isIOS = false }) {
+  if (hidden || standalone) return { showButton: false, showIosHint: false };
+  if (deferred) return { showButton: true, showIosHint: false };
+  if (isIOS) return { showButton: false, showIosHint: true };
+  return { showButton: false, showIosHint: false };
+}
+
+export function installBannerHtml({ showButton = false, showIosHint = false } = {}) {
+  if (!showButton && !showIosHint) return '';
+  const body = showButton
+    ? `<div class="flex-1">
+         <div class="text-sm font-bold">Instala Mi Control Financiero</div>
+         <div class="text-xs opacity-80">Funciona offline, con su propio icono</div>
+       </div>
+       <button data-action="install-app" class="bg-white text-indigo-700 font-bold text-xs px-3 py-2 rounded-lg active:scale-95">Instalar</button>`
+    : `<div class="flex-1">
+         <div class="text-sm font-bold">Instala Mi Control Financiero</div>
+         <div class="text-xs opacity-80">En Safari: Compartir → "Agregar a pantalla de inicio"</div>
+       </div>`;
+  return `
+    <div class="bg-indigo-600 text-white px-4 py-3 flex items-center gap-3">
+      ${body}
+      <button data-action="dismiss-install" aria-label="Ocultar aviso" class="text-white/80 text-xl leading-none px-1">×</button>
+    </div>
+  `;
+}
+
 export function card(inner, extra = '') {
   return `<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm ${extra}">${inner}</div>`;
 }

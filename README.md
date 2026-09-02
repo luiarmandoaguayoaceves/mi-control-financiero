@@ -46,7 +46,8 @@ También puedes **editar `data/app-data.json` a mano** (es JSON legible) y recar
 
 La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos generados (`scripts/gen-icons.js`, sin dependencias).
 
-- **Instalar en Android**: abre la app en Chrome → menú ⋮ → "Instalar aplicación" (o "Agregar a pantalla de inicio"). Queda como app de pantalla completa, con su icono.
+- **Instalar en Android**: al abrir la app verás un banner "Instala Mi Control Financiero" con botón **Instalar** (usa `beforeinstallprompt`); también puedes desde Chrome → menú ⋮ → "Instalar aplicación". Si lo descartas con ×, ya no vuelve a aparecer; si lo instalas, desaparece para siempre.
+- **En iOS Safari**: el banner muestra la instrucción Compartir → "Agregar a pantalla de inicio" (iOS no permite instalación automática).
 - **Offline**: el service worker cachea toda la app (CSS, JS, iconos y el JSON base). Sin red funciona igual; tus datos viven en localStorage.
 - **Estrategia de caché**: páginas y `data/app-data.json` son network-first (los deploys y el JSON actualizado llegan); el resto es cache-first con actualización en segundo plano.
 - **Actualizar la app**: Netlify tiene `Cache-Control: no-cache` para `/sw.js` y `/src/*` (ver `netlify.toml`); al publicar cambios, sube `CACHE_VERSION` en `sw.js` si cambiaste la lista de archivos precacheados.

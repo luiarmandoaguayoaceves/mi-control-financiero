@@ -6,7 +6,7 @@
 //   - Resto de assets (css/js) : cache-first con actualización en segundo plano
 // Al publicar cambios importantes, sube CACHE_VERSION.
 // ============================================================
-const CACHE_VERSION = 'mcf-pwa-v1';
+const CACHE_VERSION = 'mcf-pwa-v2';
 const CORE = [
   '/',
   '/index.html',
