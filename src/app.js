@@ -17,7 +17,7 @@ import { renderSettings } from './screens/settings.js';
 import { renderModal } from './screens/modals.js';
 import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick } from './ui.js';
 import { THEME_KEY, STORAGE_KEY } from './models.js';
-import { todayISO, shiftMonthKey, parseAmount } from './format.js';
+import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero } from './format.js';
 
 const app = document.getElementById('app');
 
@@ -112,10 +112,14 @@ function headerHtml() {
   const title = state.view === 'more'
     ? ({ menu: 'Más', services: 'Servicios', goals: 'Metas', budget: 'Presupuesto', assets: 'Patrimonio', reports: 'Reportes', settings: 'Configuración' }[state.moreView] || 'Más')
     : titles[state.view];
+  const showBack = state.view === 'more' && state.moreView !== 'menu';
   return `
     <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
       <div class="max-w-md mx-auto flex items-center justify-between px-4 py-3">
-        <h1 class="text-base font-extrabold text-slate-900 dark:text-slate-50">${title}</h1>
+        <div class="flex items-center gap-1 min-w-0">
+          ${showBack ? `<button data-action="more-back" aria-label="Volver al menú Más" class="text-3xl font-bold text-slate-500 dark:text-slate-400 leading-none px-1 -ml-2 active:scale-90">‹</button>` : ''}
+          <h1 class="text-base font-extrabold text-slate-900 dark:text-slate-50 truncate">${title}</h1>
+        </div>
         <div class="flex items-center gap-2">
           ${state.view === 'dashboard' || state.view === 'movements' ? `<button data-action="new-tx" class="bg-indigo-600 text-white w-8 h-8 rounded-full text-xl font-bold leading-none active:scale-90">+</button>` : ''}
           <button data-action="toggle-theme" aria-label="Cambiar tema" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-base">${isDark ? '☀️' : '🌙'}</button>
@@ -252,10 +256,13 @@ function handleAction(action, payload, el) {
   switch (action) {
     case 'nav':
       state.view = payload;
-      if (payload === 'more' && !['menu', 'services', 'goals', 'budget', 'assets', 'reports', 'settings'].includes(state.moreView)) {
-        state.moreView = 'menu';
-      }
+      // Tocar la pestaña "Más" siempre vuelve al menú raíz
+      if (payload === 'more') state.moreView = 'menu';
       setHash(payload);
+      break;
+    case 'more-back':
+      state.moreView = 'menu';
+      setHash('more');
       break;
     case 'goto':
       state.moreView = payload;
@@ -371,8 +378,8 @@ function handleAction(action, payload, el) {
       render();
       break;
     case 'goal-save': {
-      const target = parseAmount(document.getElementById('modal-target')?.value);
-      const current = parseAmount(document.getElementById('modal-current')?.value);
+      const target = parseAmountOrZero(document.getElementById('modal-target')?.value);
+      const current = parseAmountOrZero(document.getElementById('modal-current')?.value);
       const g = store.data.goals.find((x) => x.id === state.modal.goalId);
       if (g) updateCollection('goals', { ...g, targetAmount: target ?? g.targetAmount, currentAmount: current ?? g.currentAmount });
       state.modal = null;
@@ -389,7 +396,7 @@ function handleAction(action, payload, el) {
       render();
       break;
     case 'service-save': {
-      const expected = parseAmount(document.getElementById('modal-expected')?.value);
+      const expected = parseAmountOrZero(document.getElementById('modal-expected')?.value);
       const dueDayRaw = parseInt(document.getElementById('modal-dueday')?.value, 10);
       const s = store.data.services.find((x) => x.id === state.modal.serviceId);
       if (s) updateCollection('services', {
@@ -407,7 +414,7 @@ function handleAction(action, payload, el) {
       render();
       break;
     case 'budget-save': {
-      const planned = parseAmount(document.getElementById('modal-planned')?.value);
+      const planned = parseAmountOrZero(document.getElementById('modal-planned')?.value);
       const b = store.data.budgets.find((x) => x.id === state.modal.budgetId);
       if (b && planned !== null) updateCollection('budgets', { ...b, plannedAmount: planned });
       state.modal = null;
@@ -437,7 +444,7 @@ function handleAction(action, payload, el) {
       break;
     case 'asset-save': {
       const name = document.getElementById('modal-name')?.value?.trim();
-      const value = parseAmount(document.getElementById('modal-value')?.value);
+      const value = parseAmountOrZero(document.getElementById('modal-value')?.value);
       if (!name) return showToast('Escribe un nombre');
       if (value === null) return showToast('Valor inválido');
       const kind = state.modal.kind2;
@@ -464,7 +471,7 @@ function handleAction(action, payload, el) {
       break;
     case 'account-save': {
       const name = document.getElementById('modal-name')?.value?.trim();
-      const balance = parseAmount(document.getElementById('modal-balance')?.value);
+      const balance = parseAmountOrZero(document.getElementById('modal-balance')?.value);
       const a = store.data.accounts.find((x) => x.id === state.modal.accountId);
       if (a) updateCollection('accounts', { ...a, name: name || a.name, balance: balance ?? a.balance });
       state.modal = null;
@@ -494,7 +501,7 @@ function handleAction(action, payload, el) {
       render();
       break;
     case 'income-save': {
-      const v = parseAmount(document.getElementById('modal-income')?.value);
+      const v = parseAmountOrZero(document.getElementById('modal-income')?.value);
       updateSettings({ monthlyIncome: v ?? undefined });
       state.modal = null;
       render();

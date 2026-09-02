@@ -106,10 +106,19 @@ export function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-/** Parsea un monto desde texto (acepta "1,234.56" y "1234.56"). */
+/** Parsea un monto desde texto (acepta "1,234.56" y "1234.56"). Requiere > 0. */
 export function parseAmount(s) {
   const clean = String(s || '').replace(/\$|,/g, '').trim();
   if (!clean) return null;
   const n = parseFloat(clean.replace(',', '.'));
   return Number.isFinite(n) && n > 0 ? round2(n) : null;
+}
+
+/** Parsea un monto >= 0 (el 0 es válido: presupuestos, metas, saldos).
+ *  Devuelve null solo si está vacío o no es número. */
+export function parseAmountOrZero(s) {
+  const clean = String(s || '').replace(/\$|,/g, '').trim();
+  if (clean === '') return null;
+  const n = parseFloat(clean.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? round2(n) : null;
 }
