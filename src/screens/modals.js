@@ -26,11 +26,12 @@ function modalHeader(title, sub = '') {
   `;
 }
 
-function moneyModal(kind, title, fields, submitLabel, saveAction) {
+function moneyModal(kind, title, fields, submitLabel, saveAction, footer = '') {
   return modalShell(`
     ${modalHeader(title)}
     ${fields.map((f) => `<div class="mb-3">${inputField(f.id, f.label, f.opts || {})}</div>`).join('')}
     <button data-action="${saveAction}" class="w-full bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98]">${submitLabel}</button>
+    ${footer}
   `);
 }
 
@@ -219,6 +220,19 @@ export function renderModal() {
         { id: 'modal-cutday', label: 'Día de corte (1-28)', opts: { type: 'number', value: c ? String(c.cutDay) : '' } },
         { id: 'modal-limit', label: 'Línea de crédito ($)', opts: { type: 'number', inputmode: 'decimal', value: c ? String(c.creditLimit) : '' } },
       ], 'Guardar', 'card-save');
+    }
+
+    case 'msi': {
+      const existing = modal.id ? data.installmentPurchases.find((x) => x.id === modal.id) : undefined;
+      const paid = existing ? Math.max(0, (existing.currentPaymentNumber || 1) - 1) : 0;
+      return moneyModal('msi', existing ? 'Editar compra MSI' : 'Nueva compra a MSI', [
+        { id: 'msi-desc', label: 'Producto', opts: { value: existing?.description || '', placeholder: 'Ej. Refrigerador Walmart' } },
+        { id: 'msi-monthly', label: 'Mensualidad ($)', opts: { type: 'number', inputmode: 'decimal', value: existing ? String(existing.monthlyPayment) : '' } },
+        { id: 'msi-months', label: 'Plazo total (meses)', opts: { type: 'number', value: existing ? String(existing.totalMonths) : '' } },
+        { id: 'msi-paid', label: 'Mensualidades ya pagadas', opts: { type: 'number', value: String(paid), placeholder: '0' } },
+        { id: 'msi-interest', label: 'Interés % (0 = MSI)', opts: { type: 'number', value: existing ? String(existing.interestRate ?? 0) : '0' } },
+      ], existing ? 'Guardar cambios' : 'Guardar compra', 'msi-save',
+        existing ? `<button data-action="msi-delete" data-id="${existing.id}" class="w-full mt-2 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3">Borrar compra MSI</button>` : '');
     }
 
     case 'editIncome':

@@ -64,9 +64,10 @@ export function renderCard() {
       </div>
 
       <div class="mt-4">
-        ${section(`Compras a MSI (${msi.length})`, msi.length === 0
-          ? empty('Sin compras MSI activas')
-          : msi.map((i) => {
+        ${section(`Compras a MSI (${msi.length})`,
+          msi.length === 0
+            ? empty('Sin compras MSI activas', 'Registra tus productos a meses con "+ Agregar"')
+            : msi.map((i) => {
               const done = (i.currentPaymentNumber / i.totalMonths) * 100;
               return `
                 <div class="mb-4">
@@ -79,9 +80,18 @@ export function renderCard() {
                     <span>Pago ${i.currentPaymentNumber} de ${i.totalMonths} · ${i.interestRate === 0 ? '0% interés' : `${i.interestRate}%`}</span>
                     <span>Saldo: ${money(i.pendingBalance)}</span>
                   </div>
+                  <div class="flex gap-2 mt-2">
+                    <button data-action="msi-pay" data-id="${i.id}"
+                      class="flex-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold py-1.5 rounded-lg active:scale-95">
+                      ✓ Pagar mensualidad ${i.currentPaymentNumber}
+                    </button>
+                    <button data-action="msi-edit" data-id="${i.id}"
+                      class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95">Editar</button>
+                  </div>
                 </div>
               `;
-            }).join(''))}
+            }).join(''),
+          `<button data-action="msi-add" class="bg-indigo-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg active:scale-95">+ Agregar</button>`)}
       </div>
     </div>
   `;

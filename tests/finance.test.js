@@ -2,7 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  advanceInstallmentPayment,
   budgetStatus,
+  createInstallment,
   currentCycleRange,
   emergencyCoverageMonths,
   essentialMonthlyFromServices,
@@ -145,6 +147,67 @@ test('nextTdcPayment proyecta compras del ciclo + MSI del mes', () => {
 test('msiIncomeRatio devuelve porcentaje o null sin ingreso estimado', () => {
   assert.equal(msiIncomeRatio(1482, 20000), 7.41);
   assert.equal(msiIncomeRatio(1482, undefined), null);
+});
+
+// ---------- Registro y avance de compras MSI ----------
+
+test('createInstallment: compra nueva sin pagos arranca en pago 1 con todo el plazo pendiente', () => {
+  const item = createInstallment({ description: 'Emma Sleep', monthlyPayment: 336, totalMonths: 12, paidCount: 0 });
+  assert.equal(item.currentPaymentNumber, 1);
+  assert.equal(item.pendingBalance, 4032);
+  assert.equal(item.active, true);
+  assert.equal(item.interestRate, 0);
+});
+
+test('createInstallment: con pagos previos adelanta el pago y descuenta del pendiente', () => {
+  const item = createInstallment({ description: 'Refri Walmart', monthlyPayment: 628, totalMonths: 12, paidCount: 1 });
+  assert.equal(item.currentPaymentNumber, 2);
+  assert.equal(item.pendingBalance, 6908);
+  assert.equal(item.active, true);
+});
+
+test('createInstallment: con todas las mensualidades pagadas queda liquidada', () => {
+  const item = createInstallment({ description: 'Liquidada', monthlyPayment: 100, totalMonths: 10, paidCount: 10 });
+  assert.equal(item.active, false);
+  assert.equal(item.pendingBalance, 0);
+});
+
+test('createInstallment: pagadas negativas se tratan como cero y mayores al plazo se liquidan', () => {
+  const neg = createInstallment({ description: 'x', monthlyPayment: 100, totalMonths: 6, paidCount: -3 });
+  assert.equal(neg.currentPaymentNumber, 1);
+  assert.equal(neg.pendingBalance, 600);
+  const over = createInstallment({ description: 'x', monthlyPayment: 100, totalMonths: 6, paidCount: 99 });
+  assert.equal(over.active, false);
+  assert.equal(over.pendingBalance, 0);
+});
+
+test('advanceInstallmentPayment: registrar un pago avanza y descuenta una mensualidad', () => {
+  const item = createInstallment({ description: 'Emma', monthlyPayment: 336, totalMonths: 12, paidCount: 1 });
+  assert.equal(item.pendingBalance, 3696);
+  const next = advanceInstallmentPayment(item);
+  assert.equal(next.currentPaymentNumber, 3);
+  assert.equal(next.pendingBalance, 3360);
+  assert.equal(next.active, true);
+});
+
+test('advanceInstallmentPayment: la última mensualidad liquida la compra', () => {
+  const item = createInstallment({ description: 'Emma', monthlyPayment: 336, totalMonths: 12, paidCount: 11 });
+  const next = advanceInstallmentPayment(item);
+  assert.equal(next.active, false);
+  assert.equal(next.pendingBalance, 0);
+  assert.equal(next.currentPaymentNumber, 12);
+});
+
+test('advanceInstallmentPayment: no cambia compras inactivas o con pendiente cero', () => {
+  const done = createInstallment({ description: 'x', monthlyPayment: 100, totalMonths: 12, paidCount: 12 });
+  assert.deepEqual(advanceInstallmentPayment(done), done);
+  const inactiva = { ...createInstallment({ description: 'x', monthlyPayment: 100, totalMonths: 12 }), active: false };
+  assert.deepEqual(advanceInstallmentPayment(inactiva), inactiva);
+});
+
+test('advanceInstallmentPayment: nunca deja pendiente negativo con datos raros', () => {
+  const raro = { ...createInstallment({ description: 'x', monthlyPayment: 500, totalMonths: 12, paidCount: 0 }), pendingBalance: 300 };
+  assert.equal(advanceInstallmentPayment(raro).pendingBalance, 0);
 });
 
 // ---------- Emergencia y esenciales ----------

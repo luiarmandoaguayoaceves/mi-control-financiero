@@ -127,6 +127,41 @@ export function msiIncomeRatio(msiMonthly, monthlyIncome) {
   return round2((msiMonthly / monthlyIncome) * 100);
 }
 
+/**
+ * Construye el registro de una compra MSI desde el formulario.
+ * La única entrada del usuario es cuántas mensualidades ya cubrió:
+ * el pago siguiente (currentPaymentNumber) y el saldo pendiente
+ * (= mensualidad × meses restantes) se derivan solos.
+ */
+export function createInstallment({ description = '', monthlyPayment = 0, totalMonths = 1, paidCount = 0, interestRate = 0 } = {}) {
+  const M = Math.max(1, Math.round(Number(totalMonths) || 1));
+  const p = Math.min(Math.max(0, Math.round(Number(paidCount) || 0)), M);
+  const active = p < M;
+  return {
+    description: String(description).trim(),
+    monthlyPayment: round2(Number(monthlyPayment) || 0),
+    totalMonths: M,
+    currentPaymentNumber: active ? p + 1 : M,
+    pendingBalance: round2(monthlyPayment * (M - p)),
+    interestRate: Number(interestRate) || 0,
+    active,
+  };
+}
+
+/** Registra el pago de una mensualidad: avanza el pago y descuenta del pendiente. */
+export function advanceInstallmentPayment(item) {
+  if (!item || !item.active || item.pendingBalance <= 0) return { ...item };
+  const isLast = item.currentPaymentNumber >= item.totalMonths;
+  if (isLast) {
+    return { ...item, active: false, pendingBalance: 0, currentPaymentNumber: item.totalMonths };
+  }
+  return {
+    ...item,
+    currentPaymentNumber: item.currentPaymentNumber + 1,
+    pendingBalance: round2(Math.max(0, item.pendingBalance - item.monthlyPayment)),
+  };
+}
+
 // ---------- Dinero libre ----------
 
 /**

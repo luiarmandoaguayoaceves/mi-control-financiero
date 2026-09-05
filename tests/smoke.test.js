@@ -13,7 +13,7 @@ globalThis.localStorage = {
 };
 
 import { todayISO, addDaysISO } from '../src/format.js';
-import { currentCycleRange } from '../src/finance.js';
+import { createInstallment, currentCycleRange } from '../src/finance.js';
 
 /** Fecha dentro del ciclo de corte actual (día 1 después del corte). */
 const CYCLE_TX_DATE = addDaysISO(currentCycleRange(12, new Date()).start, 1);
@@ -57,7 +57,7 @@ function makeFixture() {
 
 mem.set('mcf_app_data_v1', JSON.stringify(makeFixture()));
 
-const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement } = await import('../src/store.js');
+const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, updateCollection, removeFromCollection } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
 store.data = load();
 
@@ -149,6 +149,64 @@ test('tarjeta muestra línea, saldo y estado vacío de MSI', () => {
   assert.ok(html.includes('$0.00'), 'MSI mensuales en cero');
   assert.ok(html.includes('Sin compras MSI activas'), 'sin MSI registrados');
   assert.ok(html.includes('MSI futuros'), 'nota: el saldo no es el pago requerido');
+});
+
+test('MSI: Tarjeta ofrece botón para agregar compras aunque la lista esté vacía', () => {
+  const html = renderCard();
+  assert.ok(html.includes('data-action="msi-add"'), 'botón agregar compra MSI');
+});
+
+test('MSI: agregar una compra la lista en Tarjeta con avance y pendiente', () => {
+  const item = { id: 'msi-test-1', cardId: 'cc-azul', ...createInstallment({ description: 'Refri Walmart', monthlyPayment: 628, totalMonths: 12, paidCount: 1 }) };
+  updateCollection('installmentPurchases', item);
+  store.data = load();
+  const html = renderCard();
+  assert.ok(html.includes('Refri Walmart'), 'describe el producto');
+  assert.ok(html.includes('Pago 2 de 12'), 'pago actual derivado');
+  assert.ok(html.includes('$628.00/mes'), 'mensualidad');
+  assert.ok(html.includes('$6,908.00'), 'saldo pendiente derivado');
+  assert.ok(html.includes('data-action="msi-pay"'), 'botón registrar pago');
+  assert.ok(html.includes('data-action="msi-edit"'), 'botón editar');
+  removeFromCollection('installmentPurchases', 'msi-test-1');
+  store.data = load();
+});
+
+test('MSI: borrar la compra la quita de Tarjeta', () => {
+  const item = { id: 'msi-test-2', cardId: 'cc-azul', ...createInstallment({ description: 'Emma Sleep', monthlyPayment: 336, totalMonths: 12, paidCount: 0 }) };
+  updateCollection('installmentPurchases', item);
+  store.data = load();
+  removeFromCollection('installmentPurchases', 'msi-test-2');
+  store.data = load();
+  const html = renderCard();
+  assert.ok(!html.includes('Emma Sleep'), 'compra eliminada');
+  assert.ok(!html.includes('$4,032.00'), 'pendiente de la compra eliminada');
+});
+
+test('modal MSI: formulario de compra nueva', () => {
+  state.modal = { kind: 'msi' };
+  const html = renderModal();
+  assert.ok(html.includes('Nueva compra a MSI'), 'título');
+  assert.ok(html.includes('msi-desc'), 'campo descripción');
+  assert.ok(html.includes('msi-monthly'), 'campo mensualidad');
+  assert.ok(html.includes('msi-months'), 'campo plazo');
+  assert.ok(html.includes('msi-paid'), 'campo mensualidades pagadas');
+  assert.ok(html.includes('data-action="msi-save"'), 'botón guardar');
+  state.modal = null;
+});
+
+test('modal MSI: edición precarga los datos de la compra', () => {
+  const item = { id: 'msi-test-3', cardId: 'cc-azul', ...createInstallment({ description: 'Lavasecadora LG', monthlyPayment: 518, totalMonths: 18, paidCount: 0 }) };
+  updateCollection('installmentPurchases', item);
+  store.data = load();
+  state.modal = { kind: 'msi', id: 'msi-test-3' };
+  const html = renderModal();
+  assert.ok(html.includes('Editar compra MSI'), 'título de edición');
+  assert.ok(html.includes('Lavasecadora LG'), 'descripción precargada');
+  assert.ok(html.includes('value="518"'), 'mensualidad precargada');
+  assert.ok(html.includes('value="18"'), 'plazo precargado');
+  state.modal = null;
+  removeFromCollection('installmentPurchases', 'msi-test-3');
+  store.data = load();
 });
 
 test('apartados muestran total y protegidos del fixture', () => {

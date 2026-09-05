@@ -3,6 +3,7 @@
 // ============================================================
 import { store, state } from './screens/appState.js';
 import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
+import { advanceInstallmentPayment, createInstallment } from './finance.js';
 import { renderDashboard } from './screens/dashboard.js';
 import { renderMovements } from './screens/movements.js';
 import { renderCard } from './screens/card.js';
@@ -527,6 +528,64 @@ function handleAction(action, payload, el) {
       render();
       break;
     }
+    case 'msi-add':
+      state.modal = { kind: 'msi' };
+      render();
+      break;
+    case 'msi-edit':
+      state.modal = { kind: 'msi', id: el.dataset.id };
+      render();
+      break;
+    case 'msi-save': {
+      const desc = document.getElementById('msi-desc')?.value?.trim();
+      const monthly = parseAmountOrZero(document.getElementById('msi-monthly')?.value);
+      const months = parseInt(document.getElementById('msi-months')?.value, 10);
+      const paid = parseInt(document.getElementById('msi-paid')?.value, 10);
+      const interest = parseAmountOrZero(document.getElementById('msi-interest')?.value);
+      if (!desc) return showToast('Escribe qué producto es');
+      if (!monthly || monthly <= 0) return showToast('Revisa la mensualidad: debe ser mayor a cero');
+      if (!Number.isFinite(months) || months < 1) return showToast('Revisa el plazo en meses');
+      if (Number.isFinite(paid) && (paid < 0 || paid > months)) return showToast('Las mensualidades pagadas no pueden exceder el plazo');
+      const existing = state.modal.id ? store.data.installmentPurchases.find((x) => x.id === state.modal.id) : null;
+      const fresh = createInstallment({
+        description: desc,
+        monthlyPayment: monthly,
+        totalMonths: months,
+        paidCount: Number.isFinite(paid) ? paid : 0,
+        interestRate: interest ?? 0,
+      });
+      if (existing) {
+        updateCollection('installmentPurchases', { ...existing, ...fresh });
+      } else {
+        const cardId = (store.data.creditCards.find((c) => c.active) || store.data.creditCards[0])?.id;
+        updateCollection('installmentPurchases', { id: `msi-${Date.now()}`, cardId, ...fresh });
+      }
+      state.modal = null;
+      showToast(existing ? 'Compra MSI actualizada' : 'Compra MSI guardada');
+      render();
+      break;
+    }
+    case 'msi-pay': {
+      const item = store.data.installmentPurchases.find((x) => x.id === el.dataset.id);
+      if (!item || !item.active) break;
+      const advanced = advanceInstallmentPayment(item);
+      updateCollection('installmentPurchases', advanced);
+      showToast(advanced.active
+        ? `Mensualidad ${advanced.currentPaymentNumber - 1} de ${advanced.totalMonths} registrada`
+        : 'Compra MSI liquidada 🎉');
+      break;
+    }
+    case 'msi-delete': {
+      const item = store.data.installmentPurchases.find((x) => x.id === el.dataset.id);
+      openConfirm('Borrar compra MSI', `¿Borrar "${item?.description}"? No afecta movimientos ni saldos.`, 'confirm-delete-msi', el.dataset.id);
+      break;
+    }
+    case 'confirm-delete-msi':
+      removeFromCollection('installmentPurchases', el.dataset.id);
+      state.modal = null;
+      showToast('Compra MSI borrada');
+      render();
+      break;
     case 'account-edit':
       state.modal = { kind: 'editAccount', accountId: el.dataset.id };
       render();
