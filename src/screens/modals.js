@@ -80,10 +80,21 @@ export function renderNewTxModal() {
   const categories = data.categories.filter((c) => c.active);
   const expenseCategories = categories.filter((c) => c.group !== 'Ingreso');
   const funds = data.funds.filter((f) => f.active);
-  const tdcEnabled = form.type === 'expense' && cards.length > 0;
-  const selectedCard = cards.find((c) => c.id === form.cardId) || cards[0];
+  const selectedCard = form.isTdc ? (cards.find((c) => c.id === form.cardId) || cards[0]) : undefined;
+  const isCardPurchase = form.type === 'expense' && !!selectedCard;
 
   const types = ['expense', 'income', 'transfer', 'creditPayment'];
+
+  const accountChips = accounts.map((a) => chip(a.name, {
+    selected: !selectedCard && form.accountId === a.id,
+    action: 'tx-account',
+    payload: a.id,
+  }));
+  const cardChips = cards.map((c) => chip(`💳 ${c.name}`, {
+    selected: selectedCard?.id === c.id,
+    action: 'tx-card',
+    payload: c.id,
+  }));
 
   return modalShell(`
     ${modalHeader(editing ? 'Editar movimiento' : 'Nuevo movimiento')}
@@ -109,50 +120,51 @@ export function renderNewTxModal() {
       </div>
     ` : ''}
 
-    ${tdcEnabled ? `
-      ${switchRow({
-        label: 'Compra con tarjeta de crédito',
-        sub: selectedCard?.name || '',
-        action: 'tx-tdc',
-        on: form.isTdc,
-      })}
-      ${form.isTdc ? `
-        <div class="mt-3">
-          <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">¿Con qué tarjeta?</div>
-          ${chipRow(cards.map((c) => chip(c.name, { selected: form.cardId === c.id || (!form.cardId && c.id === cards[0].id), action: 'tx-card', payload: c.id })))}
+    <div class="mt-3">
+      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+        ${form.type === 'creditPayment' ? '¿Qué tarjeta pagas?' : form.type === 'expense' ? '¿Con qué pagaste?' : 'Cuenta'}
+      </div>
+      ${chipRow(form.type === 'creditPayment'
+        ? cards.map((c) => chip(c.name, { selected: form.cardId === c.id || (!form.cardId && c.id === cards[0]?.id), action: 'tx-card', payload: c.id }))
+        : form.type === 'transfer'
+          ? accountChips
+          : [...accountChips, ...cardChips])}
+      ${isCardPurchase ? `
+        <div class="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1">
+          💳 Compra a crédito: se suma al saldo de <b>${selectedCard.name}</b>${selectedCard.cutDay ? ` y entra al corte del día ${selectedCard.cutDay}` : ''}. No sale de tu cuenta.
         </div>
-        ${switchRow({
-          label: 'Es a meses (MSI)',
-          sub: 'Solo se paga la mensualidad, no el total en la fecha de corte',
-          action: 'tx-msi',
-          on: form.isMsi,
-        })}
-        ${form.isMsi ? `
-          <div class="grid grid-cols-2 gap-2 mt-3">
-            <div>${inputField('tx-msi-monthly', 'Mensualidad ($)', { type: 'number', value: form.msiMonthly, inputmode: 'decimal', placeholder: '0.00' })}</div>
-            <div>${inputField('tx-msi-months', 'Meses', { type: 'number', value: form.msiMonths, inputmode: 'numeric', placeholder: '12' })}</div>
-          </div>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Se registra en Tarjeta → Compras a MSI para que solo cuente la mensualidad del mes.</p>
-        ` : ''}
+      ` : ''}
+    </div>
+
+    ${isCardPurchase ? `
+      ${switchRow({
+        label: 'Es a meses (MSI)',
+        sub: 'Solo se paga la mensualidad, no el total en la fecha de corte',
+        action: 'tx-msi',
+        on: form.isMsi,
+      })}
+      ${form.isMsi ? `
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          <div>${inputField('tx-msi-monthly', 'Mensualidad ($)', { type: 'number', value: form.msiMonthly, inputmode: 'decimal', placeholder: '0.00' })}</div>
+          <div>${inputField('tx-msi-months', 'Meses', { type: 'number', value: form.msiMonths, inputmode: 'numeric', placeholder: '12' })}</div>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Se registra en Tarjeta → Compras a MSI para que solo cuente la mensualidad del mes.</p>
       ` : ''}
     ` : ''}
 
     ${form.type === 'creditPayment' ? `
       <div class="mt-3">
-        <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">¿Qué tarjeta pagas?</div>
-        ${chipRow(cards.map((c) => chip(c.name, { selected: form.cardId === c.id || (!form.cardId && c.id === cards[0].id), action: 'tx-card', payload: c.id })))}
+        <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Cuenta de donde sale el pago</div>
+        ${chipRow(accountChips)}
       </div>
     ` : ''}
 
-    <div class="mt-3">
-      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Método de pago</div>
-      ${chipRow(PAYMENT_METHODS.map((m) => chip(m, { selected: form.paymentMethod === m, action: 'tx-method', payload: m })))}
-    </div>
-
-    <div class="mt-3">
-      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">${form.type === 'creditPayment' ? 'Cuenta de donde sale el pago' : 'Cuenta'}</div>
-      ${chipRow(accounts.map((a) => chip(a.name, { selected: form.accountId === a.id, action: 'tx-account', payload: a.id })))}
-    </div>
+    ${isCardPurchase ? '' : `
+      <div class="mt-3">
+        <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Método de pago</div>
+        ${chipRow(PAYMENT_METHODS.map((m) => chip(m, { selected: form.paymentMethod === m, action: 'tx-method', payload: m })))}
+      </div>
+    `}
 
     ${form.type === 'transfer' ? `
       <div class="mt-3">

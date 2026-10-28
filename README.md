@@ -158,8 +158,10 @@ pestaña Tarjeta muestra un selector cuando hay más de una.
 
 - **Categorías con buscador**: el formulario usa un selector filtrable (estilo select2) que
   filtra en el DOM sin re-renderizar, para no perder el foco del teclado.
-- **Compra con tarjeta de crédito**: interruptor + selector de tarjeta. El movimiento pega en
-  la cuenta de esa tarjeta (no en la de débito).
+- **Compra con tarjeta de crédito**: se elige directamente en **“¿Con qué pagaste?”**, donde
+  aparecen las cuentas de débito/efectivo y las TDC (BBVA, Nu, Mercado Pago, las que agregues)
+  con 💳. Al tocar una tarjeta el gasto se marca como compra a crédito, pega en el saldo de
+  esa tarjeta (no en la cuenta) y muestra a qué corte entra. Ya no hay interruptor aparte.
 - **Es a meses (MSI)**: pide mensualidad y plazo, registra la compra en *Compras a MSI* y el
   gasto **no** se cuenta completo en el corte: solo su mensualidad. Ya no existen los
   interruptores “Pendiente” ni el texto de “respaldo TDC / debe cubrirse con efectivo”.

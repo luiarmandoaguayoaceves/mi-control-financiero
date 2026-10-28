@@ -57,7 +57,7 @@ function makeFixture() {
 
 mem.set('mcf_app_data_v1', JSON.stringify(makeFixture()));
 
-const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, addFund, removeFund, updateCollection, removeFromCollection, normalizeData, addCard, removeCard } = await import('../src/store.js');
+const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, addFund, removeFund, updateCollection, removeFromCollection, normalizeData, addCard, removeCard, applyTransactionToData } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
 store.data = load();
 
@@ -342,11 +342,11 @@ test('contabilidad: ingreso a apartado incrementa el fondo', () => {
 });
 
 test('modal de nuevo movimiento renderiza el formulario', () => {
-  state.modal = { kind: 'newTx', form: { type: 'expense', date: todayISO(), description: '', amount: '', categoryId: 'cat-despensa', paymentMethod: 'Tarjeta', accountId: 'acc-nomina', toAccountId: '', fundId: '', isTdc: false, isPending: false, notes: '' } };
+  state.modal = { kind: 'newTx', form: { type: 'expense', date: todayISO(), description: '', amount: '', categoryId: 'cat-despensa', paymentMethod: 'Tarjeta', accountId: 'acc-nomina', toAccountId: '', fundId: '', isTdc: false, isMsi: false, msiMonths: '', msiMonthly: '', cardId: 'cc-azul', notes: '' } };
   const html = renderModal();
   assert.ok(html.includes('Nuevo movimiento'));
   assert.ok(html.includes('Monto'));
-  assert.ok(html.includes('Compra con tarjeta de crédito'));
+  assert.ok(html.includes('¿Con qué pagaste?'), 'incluye cuentas y tarjetas');
   state.modal = null;
 });
 
@@ -402,7 +402,8 @@ test('modal de movimiento: categorías con buscador, sin pendiente ni respaldo T
   assert.ok(html.includes('data-action="tx-category"'), 'opciones de categoría');
   assert.ok(!html.includes('tx-pending'), 'ya no existe el interruptor Pendiente');
   assert.ok(!html.includes('respaldo TDC'), 'ya no se habla de respaldo TDC en el formulario');
-  assert.ok(html.includes('Compra con tarjeta de crédito'), 'switch de compra TDC');
+  assert.ok(html.includes('¿Con qué pagaste?'), 'selector de cuenta o tarjeta');
+  assert.ok(html.includes('Tarjeta Nu') && html.includes('Tarjeta Mercado Pago'), 'las TDC se eligen ahí mismo');
   state.modal = null;
 });
 
@@ -412,4 +413,31 @@ test('tarjeta: selector de tarjetas y fechas de corte y límite de pago', () => 
   assert.ok(html.includes('Fecha de corte'), 'fecha de corte visible');
   assert.ok(html.includes('Límite de pago'), 'fecha límite de pago visible');
   assert.ok(html.includes('data-action="card-add"'), 'botón para agregar tarjeta');
+});
+
+
+test('compra con TDC: el gasto pega en la tarjeta elegida (Nu), no en la primera', () => {
+  const data = normalizeData(emptyData());
+  const nuAccount = data.accounts.find((a) => a.id === 'acc-tdc-nu');
+  const tx = {
+    id: 'tx-nu-1',
+    date: '2026-10-20',
+    description: 'Cena',
+    amount: 500,
+    type: 'expense',
+    categoryId: 'cat-otros',
+    paymentMethod: 'Tarjeta',
+    accountId: nuAccount.id,
+    cardId: 'cc-nu',
+    isCreditCardPurchase: true,
+  };
+  const next = applyTransactionToData(data, tx, 1);
+  assert.equal(next.creditCards.find((c) => c.id === 'cc-nu').currentBalance, 500, 'sube Nu');
+  assert.equal(next.creditCards.find((c) => c.id === 'cc-azul').currentBalance, 0, 'BBVA intacta');
+  assert.equal(next.creditCards.find((c) => c.id === 'cc-mp').currentBalance, 0, 'Mercado Pago intacta');
+
+  const mpAccount = data.accounts.find((a) => a.id === 'acc-tdc-mp');
+  const mpTx = { ...tx, id: 'tx-mp-1', accountId: mpAccount.id, cardId: 'cc-mp', amount: 250 };
+  const next2 = applyTransactionToData(next, mpTx, 1);
+  assert.equal(next2.creditCards.find((c) => c.id === 'cc-mp').currentBalance, 250, 'sube Mercado Pago');
 });

@@ -443,6 +443,8 @@ function handleAction(action, payload, el) {
     case 'tx-account':
       syncTxFormFromDom();
       state.modal.form.accountId = payload;
+      if (state.modal.form.type === 'expense') state.modal.form.isTdc = false;
+      state.modal.form.cardId = '';
       render();
       break;
     case 'tx-toaccount':
@@ -455,16 +457,21 @@ function handleAction(action, payload, el) {
       state.modal.form.fundId = state.modal.form.fundId === payload ? '' : payload;
       render();
       break;
-    case 'tx-tdc':
+    case 'tx-card': {
       syncTxFormFromDom();
-      state.modal.form.isTdc = !state.modal.form.isTdc;
-      render();
-      break;
-    case 'tx-card':
-      syncTxFormFromDom();
+      const card = store.data.creditCards.find((c) => c.id === payload);
+      const cardAccount = card
+        ? store.data.accounts.find((a) => a.cardId === card.id || a.id === card.accountId)
+        : undefined;
       state.modal.form.cardId = payload;
+      if (state.modal.form.type === 'expense') {
+        state.modal.form.isTdc = true;
+        state.modal.form.paymentMethod = 'Tarjeta';
+        if (cardAccount) state.modal.form.accountId = cardAccount.id;
+      }
       render();
       break;
+    }
     case 'tx-msi':
       syncTxFormFromDom();
       state.modal.form.isMsi = !state.modal.form.isMsi;
