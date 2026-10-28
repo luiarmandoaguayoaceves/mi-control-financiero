@@ -259,6 +259,46 @@ export function fundMovement(fundId, amount, kind) {
   persist({ ...data, funds, transactions: [...data.transactions, tx] });
 }
 
+/**
+ * Crea un apartado nuevo. `initialAmount` es opcional: si viene, se
+ * registra igual que el botón "Ingresar" (deja el movimiento en el
+ * historial y suma al total apartado, que es lo que baja el dinero libre).
+ */
+export function addFund({ name, initialAmount = 0, targetAmount, purpose, protected: isProtected = false } = {}) {
+  const data = get();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanName) return null;
+  const fund = {
+    id: newId('f'),
+    name: cleanName,
+    currentAmount: 0,
+    protected: !!isProtected,
+    active: true,
+  };
+  if (Number(targetAmount) > 0) fund.targetAmount = round2(Number(targetAmount));
+  const cleanPurpose = String(purpose ?? '').trim();
+  if (cleanPurpose) fund.purpose = cleanPurpose;
+
+  persist({ ...data, funds: [...data.funds, fund] });
+  const start = Number(initialAmount);
+  if (Number.isFinite(start) && start > 0) fundMovement(fund.id, round2(start), 'deposit');
+  return fund;
+}
+
+/**
+ * Borra un apartado. Si tenía dinero, primero lo registra como retiro
+ * (mismo movimiento que el botón "Retirar") para que el historial cuadre
+ * y el dinero deje de contar como apartado.
+ */
+export function removeFund(id) {
+  const data = get();
+  const fund = data.funds.find((f) => f.id === id);
+  if (!fund) return;
+  if (fund.currentAmount > 0) fundMovement(id, fund.currentAmount, 'withdraw');
+  const next = get();
+  persist({ ...next, funds: next.funds.filter((f) => f.id !== id) });
+}
+
 export function updateCollection(collection, item) {
   const data = get();
   const exists = data[collection].some((x) => x.id === item.id);

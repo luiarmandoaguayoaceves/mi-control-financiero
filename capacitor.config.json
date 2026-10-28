@@ -1,0 +1,12 @@
+{
+  "appId": "com.luisarmando.micontrolfinanciero",
+  "appName": "Mi Control Financiero",
+  "webDir": "www",
+  "backgroundColor": "#f8fafc",
+  "android": {
+    "appendUserAgent": "MiControlFinancieroApp"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

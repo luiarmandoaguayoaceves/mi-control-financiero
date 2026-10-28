@@ -35,6 +35,20 @@ function moneyModal(kind, title, fields, submitLabel, saveAction, footer = '') {
   `);
 }
 
+/** Chips de "dinero protegido" para el formulario de apartados. */
+function protectedChips(isProtected) {
+  return `
+    <div class="mt-1">
+      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">¿Dinero protegido?</div>
+      ${chipRow([
+        chip('Protegido', { selected: isProtected, action: 'fund-protected', payload: '1' }),
+        chip('No protegido', { selected: !isProtected, action: 'fund-protected', payload: '0' }),
+      ])}
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Protegido = no se toca salvo emergencia (renta, servicios, mensualidades).</p>
+    </div>
+  `;
+}
+
 // ---------- Formulario de movimiento ----------
 
 export function renderNewTxModal() {
@@ -155,12 +169,31 @@ export function renderModal() {
       ], modal.op === 'deposit' ? 'Ingresar' : 'Retirar', 'fund-move-save');
     }
 
+    case 'newFund': {
+      const isProtected = modal.isProtected === true;
+      return modalShell(`
+        ${modalHeader('Nuevo apartado', 'Renta, servicios, mensualidades, lo que quieras separar')}
+        <div class="mb-3">${inputField('fund-name', 'Nombre', { placeholder: 'Ej. Renta, Servicios, Tenis nuevos' })}</div>
+        <div class="mb-3">${inputField('fund-initial', 'Monto inicial ($) — opcional', { type: 'number', inputmode: 'decimal', placeholder: '0.00' })}</div>
+        <div class="mb-3">${inputField('fund-target', 'Meta ($) — opcional', { type: 'number', inputmode: 'decimal', placeholder: '0.00' })}</div>
+        <div class="mb-3">${inputField('fund-purpose', 'Propósito — opcional', { placeholder: 'Para qué es este dinero' })}</div>
+        ${protectedChips(isProtected)}
+        <button data-action="fund-save" class="w-full mt-4 bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98]">Crear apartado</button>
+      `);
+    }
+
     case 'editFund': {
       const fund = data.funds.find((f) => f.id === modal.fundId);
-      return moneyModal('editFund', `Meta: ${fund?.name || ''}`, [
-        { id: 'modal-target', label: 'Monto meta (vacío = sin meta)', opts: { type: 'number', inputmode: 'decimal', value: fund?.targetAmount ? String(fund.targetAmount) : '' } },
-        { id: 'modal-purpose', label: 'Propósito', opts: { value: fund?.purpose || '' } },
-      ], 'Guardar', 'fund-edit-save');
+      const isProtected = modal.isProtected === undefined ? !!fund?.protected : modal.isProtected;
+      return modalShell(`
+        ${modalHeader(`Editar: ${fund?.name || 'apartado'}`)}
+        <div class="mb-3">${inputField('fund-name', 'Nombre', { value: fund?.name || '' })}</div>
+        <div class="mb-3">${inputField('fund-target', 'Monto meta (vacío = sin meta)', { type: 'number', inputmode: 'decimal', value: fund?.targetAmount ? String(fund.targetAmount) : '' })}</div>
+        <div class="mb-3">${inputField('fund-purpose', 'Propósito', { value: fund?.purpose || '' })}</div>
+        ${protectedChips(isProtected)}
+        <button data-action="fund-edit-save" class="w-full mt-4 bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98]">Guardar cambios</button>
+        <button data-action="fund-delete" data-id="${fund?.id || ''}" class="w-full mt-2 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3">Borrar apartado</button>
+      `);
     }
 
     case 'editGoal': {

@@ -56,6 +56,16 @@ export function installBannerHtml({ showButton = false, showIosHint = false, can
   `;
 }
 
+/**
+ * Detecta si la app corre empaquetada como APK (Capacitor) en vez de en el
+ * navegador. Dentro del APK no tiene sentido ofrecer "instalar la app" ni
+ * registrar el service worker: los archivos ya viven en el dispositivo.
+ */
+export function isNativeShell({ userAgent = '', capacitorPlatform = '' } = {}) {
+  if (capacitorPlatform === 'android' || capacitorPlatform === 'ios') return true;
+  return /MiControlFinancieroApp/.test(String(userAgent));
+}
+
 export function card(inner, extra = '') {
   return `<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm ${extra}">${inner}</div>`;
 }

@@ -2,7 +2,7 @@
 // app.js — arranque, hash router, acciones (event delegation), tema.
 // ============================================================
 import { store, state } from './screens/appState.js';
-import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
+import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, addFund, removeFund, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
 import { advanceInstallmentPayment, createInstallment } from './finance.js';
 import { renderDashboard } from './screens/dashboard.js';
 import { renderMovements } from './screens/movements.js';
@@ -16,9 +16,9 @@ import { renderAssets } from './screens/assets.js';
 import { renderReports } from './screens/reports.js';
 import { renderSettings } from './screens/settings.js';
 import { renderModal } from './screens/modals.js';
-import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick, installPromptState, installBannerHtml } from './ui.js';
+import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick, installPromptState, installBannerHtml, isNativeShell } from './ui.js';
 import { THEME_KEY, STORAGE_KEY } from './models.js';
-import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero, setTimeOffset } from './format.js';
+import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero, setTimeOffset, money } from './format.js';
 
 const app = document.getElementById('app');
 
@@ -166,7 +166,7 @@ function render() {
     ${headerHtml()}
     ${installBannerHtml(installPromptState({
       deferred: !!deferredInstallPrompt,
-      hidden: localStorage.getItem(INSTALL_HIDDEN_KEY) === '1',
+      hidden: isNativeApp() || localStorage.getItem(INSTALL_HIDDEN_KEY) === '1',
       standalone: isStandalone(),
       isIOS: isIOSDevice(),
     }))}
@@ -424,18 +424,72 @@ function handleAction(action, payload, el) {
       render();
       break;
     }
+    case 'fund-add':
+      state.modal = { kind: 'newFund', isProtected: false };
+      render();
+      break;
+    case 'fund-protected':
+      if (state.modal) state.modal.isProtected = payload === '1';
+      render();
+      break;
+    case 'fund-save': {
+      const name = document.getElementById('fund-name')?.value?.trim();
+      if (!name) return showToast('Escribe un nombre para el apartado');
+      const initial = parseAmountOrZero(document.getElementById('fund-initial')?.value);
+      const target = parseAmountOrZero(document.getElementById('fund-target')?.value);
+      const purpose = document.getElementById('fund-purpose')?.value?.trim();
+      addFund({
+        name,
+        initialAmount: initial ?? 0,
+        targetAmount: target ?? 0,
+        purpose,
+        protected: !!state.modal.isProtected,
+      });
+      state.modal = null;
+      showToast('Apartado creado');
+      render();
+      break;
+    }
     case 'fund-edit':
       state.modal = { kind: 'editFund', fundId: el.dataset.id };
       render();
       break;
     case 'fund-edit-save': {
-      const target = parseAmount(document.getElementById('modal-target')?.value);
       const fund = store.data.funds.find((f) => f.id === state.modal.fundId);
-      if (fund) updateCollection('funds', { ...fund, targetAmount: target || undefined, purpose: document.getElementById('modal-purpose')?.value || undefined });
+      if (!fund) {
+        state.modal = null;
+        return render();
+      }
+      const name = document.getElementById('fund-name')?.value?.trim();
+      const target = parseAmountOrZero(document.getElementById('fund-target')?.value);
+      const purpose = document.getElementById('fund-purpose')?.value?.trim();
+      updateCollection('funds', {
+        ...fund,
+        name: name || fund.name,
+        targetAmount: target || undefined,
+        purpose: purpose || undefined,
+        protected: state.modal.isProtected === undefined ? !!fund.protected : !!state.modal.isProtected,
+      });
       state.modal = null;
+      showToast('Apartado actualizado');
       render();
       break;
     }
+    case 'fund-delete': {
+      const fund = store.data.funds.find((f) => f.id === el.dataset.id);
+      if (!fund) break;
+      const extra = fund.currentAmount > 0
+        ? ` Su dinero (${money(fund.currentAmount)}) dejará de estar apartado y volverá a tu dinero libre.`
+        : '';
+      openConfirm('Borrar apartado', `¿Borrar "${fund.name}"?${extra}`, 'confirm-delete-fund', fund.id);
+      break;
+    }
+    case 'confirm-delete-fund':
+      removeFund(el.dataset.id);
+      state.modal = null;
+      showToast('Apartado borrado');
+      render();
+      break;
     case 'goal-edit':
       state.modal = { kind: 'editGoal', goalId: el.dataset.id };
       render();
@@ -778,7 +832,7 @@ app.addEventListener('change', (e) => {
 
 // ---------- PWA: registro del service worker ----------
 
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !isNativeApp()) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('./sw.js')
@@ -802,6 +856,14 @@ function isStandalone() {
 
 function isIOSDevice() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+}
+
+/** ¿Corre dentro del APK (Capacitor) y no en un navegador? */
+function isNativeApp() {
+  return isNativeShell({
+    userAgent: navigator.userAgent || '',
+    capacitorPlatform: window.Capacitor?.getPlatform?.() || '',
+  });
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {

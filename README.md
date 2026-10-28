@@ -1,7 +1,8 @@
 # Mi Control Financiero
 
 App personal de finanzas (v2, web estática) — **HTML + Tailwind CSS + JavaScript vanilla**.
-Sin backend: se sube tal cual a **Netlify** y los datos se guardan como **JSON en el mismo proyecto**.
+Sin backend: se sube tal cual a **Netlify** (PWA instalable) y además se empaqueta como
+**APK de Android** con Capacitor para instalar la app directamente en el celular.
 
 Principio central: **"Saldo bancario NO es igual a dinero libre"**.
 
@@ -53,24 +54,72 @@ La app es una PWA: tiene `manifest.json` + `sw.js` (service worker) + iconos gen
 - **Actualizar la app**: Netlify tiene `Cache-Control: no-cache` para `/sw.js` y `/src/*` (ver `netlify.toml`); al publicar cambios, sube `CACHE_VERSION` en `sw.js` si cambiaste la lista de archivos precacheados.
 - **Requisito**: HTTPS (Netlify lo da gratis). En local, `localhost` también cuenta como contexto seguro.
 
+## APK de Android (instalar en el celular)
+
+La app también se empaqueta como **APK** con [Capacitor](https://capacitorjs.com): es la misma
+app web (los mismos HTML/CSS/JS) dentro de un contenedor nativo de Android. No hay dos
+códigos: se edita `src/` y se vuelve a compilar.
+
+```
+npm run android:apk      # genera www/ → copia a android/ → compila
+# APK resultante: android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Instalar en el celular**: pasa ese `app-debug.apk` al teléfono (USB, Drive, Telegram…) y
+ábrelo. Android pedirá permitir "instalar apps de origen desconocido" para esa app; acepta
+y queda instalada con su icono. Es un APK **debug** (firmado con la llave de depuración):
+sirve perfecto para uso personal; si algún día quieres publicarlo en Play Store hay que
+firmarlo con una llave propia (`assembleRelease` + keystore).
+
+Requisitos para compilar (una sola vez): **JDK 21** y **Android SDK** (platform 36 y
+build-tools 36). El proyecto `android/` ya está en el repo; `android/local.properties`
+apunta al SDK de tu máquina y no se versiona.
+
+> **Datos**: el APK guarda tus finanzas en el `localStorage` de SU WebView, que es un almacén
+> distinto al de Chrome. Lo que captures en Chrome/Netlify no aparece en el APK y viceversa.
+> Para mover datos: Configuración → **Exportar respaldo JSON** → en el otro lado **Importar**.
+
+Dentro del APK la app se comporta distinto en dos detalles (automático, por `isNativeShell`):
+no muestra el aviso de "instala la app" (ya está instalada) y no registra el service worker
+(los archivos ya viven en el dispositivo).
+
+### Apartados
+
+Pestaña **Apartados**: botón **+ Nuevo** para crear un apartado con nombre, monto inicial
+opcional, meta y propósito; los chips **Protegido / No protegido** deciden si cuenta como
+dinero intocable. Cada apartado permite **Ingresar**, **Retirar** y **Editar** (nombre, meta,
+propósito, protegido y **borrar**). Crear con monto inicial o borrar con dinero deja su
+movimiento en el historial, para que nunca se pierda el rastro del dinero.
+
 ## Comandos
 
 | Comando | Qué hace |
 | --- | --- |
 | `npm start` | Sirve la app con `npx serve` en http://localhost:8080 |
-| `npm test` | 39 tests: lógica financiera, formato, contabilidad y smoke de pantallas |
+| `npm test` | 62 tests: lógica financiera, formato, contabilidad, smoke de pantallas y cableado de botones |
 | `npm run css` | Recompila Tailwind v4 → `css/tailwind.css` (tras cambiar clases) |
+| `npm run www` | Copia la app web a `www/` (lo que se empaqueta en el APK) |
+| `npm run android:apk` | Genera `www/`, sincroniza Capacitor y compila el APK debug |
+| `npm run android:open` | Abre el proyecto Android en Android Studio |
+| `npm run icons` / `npm run icons:android` | Regenera iconos de la PWA / del APK (sin dependencias) |
 
 ## Estructura
 
 ```
 index.html
 manifest.json             PWA: nombre, iconos, standalone
-sw.js                     Service worker: offline + cache
+sw.js                     Service worker: offline + cache (solo web, no en el APK)
 netlify.toml              publish = "." (sin build) + headers para sw.js
 icons/                    icon-192.png, icon-512.png, apple-touch-icon.png
-scripts/gen-icons.js      genera los iconos PNG (sin dependencias)
+capacitor.config.json     APK: appId, nombre, webDir=www, UA propio
+android/                  Proyecto Android (Capacitor) del APK
+www/                      App copiada para el APK (generada, no se versiona)
 css/tailwind.css          Tailwind COMPILADO (sin CDN, funciona offline)
+scripts/
+  gen-icons.js            genera los iconos PNG de la PWA
+  gen-android-icons.js    genera iconos y splash del APK
+  icon-art.js             arte compartido (encoder PNG propio, sin dependencias)
+  build-www.js            copia index/css/src/icons a www/
 src/
   input.css               fuente Tailwind (@import + @custom-variant dark)
   models.js               modelos y constantes
@@ -81,7 +130,7 @@ src/
   app.js                  arranque, router de hash, acciones, tema oscuro
   screens/                dashboard, movements, card, funds, services, goals,
                           budget, assets, reports, settings, more, modals
-tests/                    node --test (finance, seed, smoke)
+tests/                    node --test (finance, format, smoke, wiring)
 ```
 
 ## Decisiones importantes
@@ -108,4 +157,4 @@ La app inicia VACÍA (sin datos semilla): solo categorías por defecto y cuentas
 - Notificaciones de corte/límite/servicios
 - Presupuestos recurrentes automáticos mes a mes
 - Sección Vehículos dedicada (KTM RC 200) con historial
-- PWA ya está: instalable desde Chrome/Netlify sin APK
+- APK firmado con llave propia (release) si algún día va a Play Store

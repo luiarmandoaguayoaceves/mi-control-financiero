@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mi Control Financiero</string>
+    <string name="title_activity_main">Mi Control Financiero</string>
+    <string name="package_name">com.luisarmando.micontrolfinanciero</string>
+    <string name="custom_url_scheme">com.luisarmando.micontrolfinanciero</string>
+</resources>

@@ -6,7 +6,7 @@
 // Los DATOS del usuario viven en localStorage y el service worker no los toca.
 // Al publicar cambios importantes, sube CACHE_VERSION.
 // ============================================================
-const CACHE_VERSION = 'mcf-pwa-v8';
+const CACHE_VERSION = 'mcf-pwa-v9';
 const CORE = [
   '/',
   '/index.html',
@@ -16,7 +16,6 @@ const CORE = [
   '/icons/icon-512.png',
   '/src/app.js',
   '/src/store.js',
-  '/src/seed.js',
   '/src/finance.js',
   '/src/format.js',
   '/src/models.js',

@@ -13,7 +13,7 @@ globalThis.localStorage = {
 };
 
 import { todayISO, addDaysISO } from '../src/format.js';
-import { createInstallment, currentCycleRange } from '../src/finance.js';
+import { createInstallment, currentCycleRange, totalFunds } from '../src/finance.js';
 
 /** Fecha dentro del ciclo de corte actual (día 1 después del corte). */
 const CYCLE_TX_DATE = addDaysISO(currentCycleRange(12, new Date()).start, 1);
@@ -57,7 +57,7 @@ function makeFixture() {
 
 mem.set('mcf_app_data_v1', JSON.stringify(makeFixture()));
 
-const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, updateCollection, removeFromCollection } = await import('../src/store.js');
+const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, addFund, removeFund, updateCollection, removeFromCollection } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
 store.data = load();
 
@@ -73,7 +73,7 @@ const { renderReports } = await import('../src/screens/reports.js');
 const { renderSettings } = await import('../src/screens/settings.js');
 const { renderMore } = await import('../src/screens/more.js');
 const { renderModal } = await import('../src/screens/modals.js');
-const { shouldIgnoreBackdropClick, installPromptState, installBannerHtml } = await import('../src/ui.js');
+const { shouldIgnoreBackdropClick, installPromptState, installBannerHtml, isNativeShell } = await import('../src/ui.js');
 const { state } = await import('../src/screens/appState.js');
 
 test('arranque vacío: la app NO tiene datos semilla', () => {
@@ -122,6 +122,21 @@ test('aviso de instalación PWA: render del banner', () => {
   assert.ok(installBannerHtml({ showIosHint: true }).includes('Agregar a pantalla de inicio'));
   assert.equal(installBannerHtml({}), '');
   assert.equal(installBannerHtml({ showButton: false, showIosHint: false }), '');
+});
+
+test('APK: la app sabe cuándo corre dentro del contenedor nativo', () => {
+  // Navegador normal: no es nativo (se ofrece instalar la PWA)
+  assert.equal(isNativeShell({ userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/130' }), false);
+  assert.equal(isNativeShell({}), false);
+  // Dentro del APK: UA propio (capacitor.config.json -> android.appendUserAgent)
+  assert.equal(isNativeShell({ userAgent: 'Mozilla/5.0 (Linux; Android 14) MiControlFinancieroApp' }), true);
+  // O por el puente de Capacitor
+  assert.equal(isNativeShell({ capacitorPlatform: 'android' }), true);
+  assert.equal(isNativeShell({ capacitorPlatform: 'ios' }), true);
+  // Dentro del APK el aviso de instalación no se muestra
+  assert.deepEqual(installPromptState({ hidden: isNativeShell({ capacitorPlatform: 'android' }) }), {
+    showButton: false, showIosHint: false, canPrompt: false,
+  });
 });
 
 test('modal: un clic en el contenido no cierra el modal (solo el fondo)', () => {
@@ -213,6 +228,64 @@ test('apartados muestran total y protegidos del fixture', () => {
   const html = renderFunds();
   assert.ok(html.includes('$6,500.00'));
   assert.ok(html.includes('$6,500.00 protegidos'));
+});
+
+test('apartados: la pantalla ofrece crear uno nuevo', () => {
+  const html = renderFunds();
+  assert.ok(html.includes('data-action="fund-add"'), 'botón + Nuevo');
+  assert.ok(html.includes('+ Nuevo'));
+});
+
+test('modal de nuevo apartado: nombre, monto inicial, meta y protegido', () => {
+  state.modal = { kind: 'newFund', isProtected: false };
+  const html = renderModal();
+  assert.ok(html.includes('Nuevo apartado'), 'título');
+  assert.ok(html.includes('fund-name'), 'campo nombre');
+  assert.ok(html.includes('fund-initial'), 'campo monto inicial');
+  assert.ok(html.includes('fund-target'), 'campo meta');
+  assert.ok(html.includes('data-action="fund-save"'), 'botón crear');
+  assert.ok(html.includes('data-action="fund-protected"'), 'chips protegido');
+  state.modal = null;
+});
+
+test('modal de editar apartado: precarga datos y permite borrar', () => {
+  state.modal = { kind: 'editFund', fundId: 'f-renta' };
+  const html = renderModal();
+  assert.ok(html.includes('value="Renta"'), 'nombre precargado');
+  assert.ok(html.includes('data-action="fund-edit-save"'), 'botón guardar');
+  assert.ok(html.includes('data-action="fund-delete"'), 'botón borrar');
+  state.modal = null;
+});
+
+test('apartados: crear uno con monto inicial lo lista y mueve el dinero', () => {
+  const totalAntes = totalFunds(getData().funds);
+  const fund = addFund({ name: 'Tenis nuevos', initialAmount: 800, targetAmount: 2500, purpose: 'Running', protected: false });
+  store.data = load();
+  const html = renderFunds();
+  assert.ok(html.includes('Tenis nuevos'), 'aparece en la lista');
+  assert.ok(html.includes('$800.00'), 'monto inicial');
+  assert.ok(html.includes('meta $2,500.00'), 'meta');
+  assert.equal(totalFunds(getData().funds), Math.round((totalAntes + 800) * 100) / 100, 'suma al total apartado');
+  assert.ok(
+    getData().transactions.some((t) => t.fundId === fund.id && t.description === 'Ingreso a apartado: Tenis nuevos'),
+    'deja rastro del ingreso',
+  );
+  removeFund(fund.id);
+  store.data = load();
+});
+
+test('apartados: borrar uno con dinero lo saca del total y deja rastro', () => {
+  const totalAntes = totalFunds(getData().funds);
+  const fund = addFund({ name: 'Viaje', initialAmount: 1000, protected: true });
+  assert.equal(totalFunds(getData().funds), Math.round((totalAntes + 1000) * 100) / 100, 'al crearlo se aparta el dinero');
+  removeFund(fund.id);
+  store.data = load();
+  assert.ok(!renderFunds().includes('Viaje'), 'ya no se lista');
+  assert.equal(totalFunds(getData().funds), totalAntes, 'el dinero deja de estar apartado');
+  assert.ok(
+    getData().transactions.some((t) => t.description === 'Retiro de apartado: Viaje'),
+    'deja rastro del retiro',
+  );
 });
 
 test('todas las pantallas renderizan sin excepciones', () => {
