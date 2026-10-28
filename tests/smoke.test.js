@@ -373,8 +373,14 @@ test('normalizeData agrega Nu y Mercado Pago una sola vez y sin tocar saldos', (
   assert.equal(twice.accounts.find((a) => a.id === 'acc-nomina').balance, 12074.73, 'saldo intacto');
   assert.equal(twice.creditCards.find((c) => c.id === 'cc-azul').currentBalance, 20000.5, 'deuda intacta');
   const nu = twice.creditCards.find((c) => /Nu/.test(c.name));
-  assert.equal(nu.cutDay, null, 'sin inventar fecha de corte');
+  const mp = twice.creditCards.find((c) => /Mercado Pago/.test(c.name));
+  assert.equal(nu.cutDay, 6, 'corte de Nu: día 6');
+  assert.equal(mp.cutDay, 21, 'corte de Mercado Pago: día 21');
   assert.equal(twice.accounts.find((a) => a.id === nu.accountId).cardId, nu.id, 'cuenta enlazada');
+
+  // Si ya tenías una fecha puesta a mano, la migración NO la pisa
+  const custom = normalizeData({ ...base, creditCards: [{ ...base.creditCards[0], cutDay: 19 }] });
+  assert.equal(custom.creditCards.find((c) => c.id === 'cc-azul').cutDay, 19);
 });
 
 test('cada tarjeta tiene su cuenta de crédito y se puede dar de baja solo si está limpia', () => {

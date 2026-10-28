@@ -135,16 +135,19 @@ movimiento en el historial, para que nunca se pierda el rastro del dinero.
 ### Tarjetas de crédito (varias)
 
 La app maneja **una tarjeta por cuenta de crédito**: BBVA Azul, **Nu** y **Mercado Pago**
-vienen de fábrica y se pueden agregar más (Configuración → Tarjetas de crédito → **+ Agregar
-tarjeta**, o desde la pestaña Tarjeta). Cada tarjeta guarda:
+vienen de fábrica con sus fechas de corte reales (**BBVA día 12, Nu día 6, Mercado Pago día
+21**) y se pueden agregar más desde **Más → Tarjetas de crédito → + Nueva** (o desde la
+pestaña Tarjeta). Ahí mismo se editan y se borran (solo si están en $0 y sin movimientos).
+Cada tarjeta guarda:
 
 - **día de corte** (`cutDay`) y **día límite de pago** (`paymentDueDay`), ambos 1–28;
 - línea de crédito y saldo (el saldo lo mueven los movimientos, no se teclea);
 - su cuenta de crédito asociada (`accountId` ↔ `cardId`).
 
-Nu y Mercado Pago nacen con **fechas vacías a propósito**: la app no inventa cortes. Mientras
-no las configures, la pantalla Tarjeta muestra “Corte sin configurar” y no calcula pagos ni
-recordatorios. La migración (`normalizeData` en `store.js`) enlaza tarjeta↔cuenta y agrega
+El día de corte de Nu (6) y Mercado Pago (21) se rellena en la migración **solo si la tarjeta
+no tiene uno puesto por ti**: si algún día lo cambias a mano, la migración no lo pisa. El
+**día límite de pago** sí queda vacío hasta que lo pongas (mientras no exista, se usa el día
+1 del mes siguiente al corte). La migración (`normalizeData` en `store.js`) enlaza tarjeta↔cuenta y agrega
 Nu/Mercado Pago **sin tocar saldos ni movimientos** (es idempotente y también corre al
 importar un respaldo). Borrar una tarjeta solo se permite si está en $0 y sin movimientos.
 
@@ -161,6 +164,24 @@ pestaña Tarjeta muestra un selector cuando hay más de una.
   gasto **no** se cuenta completo en el corte: solo su mensualidad. Ya no existen los
   interruptores “Pendiente” ni el texto de “respaldo TDC / debe cubrirse con efectivo”.
 - **Pago TDC**: ahora pregunta **qué tarjeta** pagas (antes asumía la primera).
+
+### Suscripciones y pagos recurrentes
+
+**Más → Suscripciones** maneja cobros que se registran solos: nombre, monto, **día de cobro
+(1–28)**, categoría (con buscador) y de dónde se cobra (cuenta de débito/efectivo o una TDC).
+Se pueden crear, editar, pausar y borrar.
+
+El motor vive en `store.js`:
+
+- `nextChargeFor(day)` calcula el primer cobro (estrictamente futuro, para no cobrar al crear).
+- `chargeRecurring(data, today)` registra un gasto por cada cobro vencido y avanza
+  `nextChargeDate` un mes; si la app estuvo cerrada varios meses, recupera los pendientes
+  (máximo 36). El id del movimiento es `tx-sub-<id>-<fecha>`, así que **es idempotente**:
+  reabrir la app no duplica cargos.
+- `runRecurringCharges()` lo aplica al almacén; se llama al arrancar y en el cambio de día en
+  vivo (la app abierta a medianoche también cobra).
+- Cobrar con TDC sube la deuda de esa tarjeta (y entra al ciclo de su corte); cobrar con
+  cuenta descuenta el saldo disponible.
 
 ### Recordatorios de corte y pago (APK)
 

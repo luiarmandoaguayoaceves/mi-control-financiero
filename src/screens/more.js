@@ -3,7 +3,9 @@ import { state } from './appState.js';
 
 const ITEMS = [
   { view: 'budget', label: 'Presupuesto', emoji: '🎯', desc: 'Semáforo por categoría' },
-  { view: 'services', label: 'Servicios', emoji: '🧾', desc: 'Gastos fijos y suscripciones' },
+  { view: 'services', label: 'Servicios', emoji: '🧾', desc: 'Agua, luz, gas: gastos fijos' },
+  { view: 'subscriptions', label: 'Suscripciones', emoji: '🔁', desc: 'Pagos recurrentes que se cobran solos' },
+  { view: 'cards', label: 'Tarjetas de crédito', emoji: '💳', desc: 'Cortes, límite de pago y líneas' },
   { view: 'goals', label: 'Metas', emoji: '🎓', desc: 'Emergencia, provisiones, inversión' },
   { view: 'assets', label: 'Patrimonio', emoji: '📈', desc: 'Activos, pasivos y evolución' },
   { view: 'reports', label: 'Reportes', emoji: '📊', desc: 'Resumen mensual y gráficas' },

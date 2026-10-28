@@ -2,7 +2,7 @@
 // app.js — arranque, hash router, acciones (event delegation), tema.
 // ============================================================
 import { store, state } from './screens/appState.js';
-import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, addFund, removeFund, addCard, removeCard, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
+import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, addFund, removeFund, addCard, removeCard, nextChargeFor, runRecurringCharges, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
 import { advanceInstallmentPayment, createInstallment } from './finance.js';
 import { renderDashboard } from './screens/dashboard.js';
 import { renderMovements } from './screens/movements.js';
@@ -15,6 +15,8 @@ import { renderBudget } from './screens/budget.js';
 import { renderAssets } from './screens/assets.js';
 import { renderReports } from './screens/reports.js';
 import { renderSettings } from './screens/settings.js';
+import { renderSubscriptions } from './screens/subscriptions.js';
+import { renderCards } from './screens/cards.js';
 import { renderModal } from './screens/modals.js';
 import { syncReminders } from './reminders.js';
 import { updateHomeWidget } from './widget.js';
@@ -95,6 +97,8 @@ function viewHtmlFor(view) {
         case 'assets': return renderAssets();
         case 'reports': return renderReports();
         case 'settings': return renderSettings();
+        case 'subscriptions': return renderSubscriptions();
+        case 'cards': return renderCards();
         default: return renderMore();
       }
     default: return renderDashboard();
@@ -149,7 +153,7 @@ function headerHtml() {
     more: 'Más',
   };
   const title = state.view === 'more'
-    ? ({ menu: 'Más', services: 'Servicios', goals: 'Metas', budget: 'Presupuesto', assets: 'Patrimonio', reports: 'Reportes', settings: 'Configuración' }[state.moreView] || 'Más')
+    ? ({ menu: 'Más', services: 'Servicios', subscriptions: 'Suscripciones', cards: 'Tarjetas', goals: 'Metas', budget: 'Presupuesto', assets: 'Patrimonio', reports: 'Reportes', settings: 'Configuración' }[state.moreView] || 'Más')
     : titles[state.view];
   const showBack = state.view === 'more' && state.moreView !== 'menu';
   return `
@@ -576,6 +580,98 @@ function handleAction(action, payload, el) {
       showToast('Apartado borrado');
       render();
       break;
+    case 'sub-add':
+      state.modal = { kind: 'editSubscription', id: null, form: defaultSubForm() };
+      render();
+      break;
+    case 'sub-edit': {
+      const sub = store.data.subscriptions.find((x) => x.id === el.dataset.id);
+      if (!sub) break;
+      state.modal = { kind: 'editSubscription', id: sub.id, form: subFormFrom(sub) };
+      render();
+      break;
+    }
+    case 'sub-category':
+      syncSubFormFromDom();
+      state.modal.form.categoryId = payload;
+      render();
+      break;
+    case 'sub-account':
+      syncSubFormFromDom();
+      state.modal.form.accountId = payload;
+      state.modal.form.cardId = '';
+      render();
+      break;
+    case 'sub-card':
+      syncSubFormFromDom();
+      state.modal.form.cardId = payload;
+      state.modal.form.accountId = '';
+      render();
+      break;
+    case 'sub-active':
+      syncSubFormFromDom();
+      state.modal.form.active = !state.modal.form.active;
+      render();
+      break;
+    case 'sub-save': {
+      syncSubFormFromDom();
+      const f = state.modal.form;
+      const name = f.name.trim();
+      const amount = parseAmount(f.amount);
+      const day = parseInt(f.day, 10);
+      if (!name) return showToast('Escribe el nombre de la suscripción');
+      if (!amount) return showToast('Revisa el monto: debe ser mayor a cero');
+      if (!Number.isFinite(day) || day < 1 || day > 28) return showToast('El día de cobro va del 1 al 28');
+      const card = store.data.creditCards.find((c) => c.id === f.cardId);
+      const account = store.data.accounts.find((a) => a.id === f.accountId);
+      const cardAccount = card
+        ? store.data.accounts.find((a) => a.cardId === card.id || a.id === card.accountId)
+        : undefined;
+      if (!card && !account) return showToast('Elige la cuenta o la tarjeta de donde se cobra');
+      const accountId = card ? cardAccount?.id : account.id;
+      if (!accountId) return showToast('Esa tarjeta no tiene cuenta asociada');
+
+      const id = el.dataset.id || `sub-${Date.now()}`;
+      const existing = store.data.subscriptions.find((x) => x.id === id);
+      const keepDate = existing && existing.dayOfMonth === day && existing.nextChargeDate;
+      updateCollection('subscriptions', {
+        id,
+        name,
+        amount: round2(amount),
+        dayOfMonth: day,
+        categoryId: f.categoryId || 'cat-suscripciones',
+        accountId,
+        cardId: card?.id,
+        isCreditCardPurchase: !!card,
+        paymentMethod: card ? 'Tarjeta' : 'Débito',
+        active: f.active !== false,
+        notes: f.notes?.trim() || undefined,
+        nextChargeDate: keepDate ? existing.nextChargeDate : nextChargeFor(day),
+        lastChargedAt: existing?.lastChargedAt,
+      });
+      state.modal = null;
+      showToast(existing ? 'Suscripción actualizada' : 'Suscripción creada');
+      render();
+      break;
+    }
+    case 'sub-toggle': {
+      const sub = store.data.subscriptions.find((x) => x.id === el.dataset.id);
+      if (sub) {
+        updateCollection('subscriptions', { ...sub, active: !sub.active });
+        showToast(sub.active ? 'Suscripción pausada' : 'Suscripción activada');
+      }
+      break;
+    }
+    case 'sub-delete': {
+      const sub = store.data.subscriptions.find((x) => x.id === el.dataset.id);
+      openConfirm('Borrar suscripción', `¿Borrar "${sub?.name || ''}"? Los cobros ya registrados se quedan en tu historial.`, 'confirm-delete-sub', el.dataset.id);
+      break;
+    }
+    case 'confirm-delete-sub':
+      removeFromCollection('subscriptions', el.dataset.id);
+      state.modal = null;
+      showToast('Suscripción borrada');
+      break;
     case 'goal-edit':
       state.modal = { kind: 'editGoal', goalId: el.dataset.id };
       render();
@@ -899,6 +995,44 @@ function handleAction(action, payload, el) {
   }
 }
 
+function defaultSubForm() {
+  const data = store.data;
+  const acc = data.accounts.find((a) => a.type !== 'credit' && a.active) || data.accounts[0];
+  return {
+    name: '',
+    amount: '',
+    day: '',
+    categoryId: 'cat-suscripciones',
+    accountId: acc?.id || '',
+    cardId: '',
+    active: true,
+    notes: '',
+  };
+}
+
+function subFormFrom(sub) {
+  return {
+    name: sub.name || '',
+    amount: String(sub.amount ?? ''),
+    day: sub.dayOfMonth ? String(sub.dayOfMonth) : '',
+    categoryId: sub.categoryId || 'cat-suscripciones',
+    accountId: sub.cardId ? '' : (sub.accountId || ''),
+    cardId: sub.cardId || '',
+    active: sub.active !== false,
+    notes: sub.notes || '',
+  };
+}
+
+function syncSubFormFromDom() {
+  const modal = state.modal;
+  if (!modal || modal.kind !== 'editSubscription') return;
+  const val = (id) => document.getElementById(id)?.value;
+  modal.form.name = val('sub-name') ?? modal.form.name;
+  modal.form.amount = val('sub-amount') ?? modal.form.amount;
+  modal.form.day = val('sub-day') ?? modal.form.day;
+  modal.form.notes = val('sub-notes') ?? modal.form.notes;
+}
+
 function defaultTxForm() {
   const data = store.data;
   const acc = data.accounts.find((a) => a.type !== 'credit' && a.active) || data.accounts[0];
@@ -1089,7 +1223,9 @@ setInterval(() => {
   if (state.month === oldMonth) state.month = newMonth;
   if (state.budgetMonth === oldMonth) state.budgetMonth = newMonth;
   if (state.reportsMonth === oldMonth) state.reportsMonth = newMonth;
+  const cobros = runRecurringCharges(d);
   render();
+  if (cobros.length) showToast(`Se registraron ${cobros.length} cobro(s) automático(s)`);
 }, 30000);
 
 // ---------- Arranque ----------
@@ -1116,8 +1252,12 @@ function scheduleReminderSync() {
 }
 
 store.data = load();
+const cobrosAutomaticos = runRecurringCharges();
 parseHash();
 render();
+if (cobrosAutomaticos.length) {
+  showToast(`Se registraron ${cobrosAutomaticos.length} cobro(s) automático(s)`);
+}
 scheduleReminderSync();
 syncClock().then(() => {
   lastDay = todayISO();

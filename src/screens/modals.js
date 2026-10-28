@@ -1,7 +1,8 @@
 // Render de modales (nuevo/editar movimiento, apartados, metas, confirmación…).
 import { store, state } from './appState.js';
 import { esc, chip, chipRow, inputField, searchSelect, switchRow } from '../ui.js';
-import { todayISO, money } from '../format.js';
+import { todayISO, money, formatDateShort } from '../format.js';
+import { nextChargeFor } from '../store.js';
 import { CATEGORY_IDS, PAYMENT_METHODS, TRANSACTION_TYPE_LABELS } from '../models.js';
 
 function modalShell(inner) {
@@ -292,6 +293,47 @@ export function renderModal() {
         ${c && data.creditCards.length > 1 ? `
           <button data-action="card-delete" data-id="${c.id}" class="w-full mt-2 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3">
             Borrar tarjeta
+          </button>
+        ` : ''}
+      `);
+    }
+
+    case 'editSubscription': {
+      const sub = modal.id ? data.subscriptions.find((s) => s.id === modal.id) : null;
+      const form = modal.form;
+      const accounts = data.accounts.filter((a) => a.active && a.type !== 'credit');
+      const cards = data.creditCards.filter((c) => c.active);
+      const categories = data.categories.filter((c) => c.active);
+      return modalShell(`
+        ${modalHeader(sub ? 'Editar suscripción' : 'Nueva suscripción', `Primer cobro: ${formatDateShort(nextChargeFor(form.day))}`)}
+        <div class="mb-3">${inputField('sub-name', 'Nombre', { value: form.name, placeholder: 'Ej. Netflix, Spotify, Renta' })}</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>${inputField('sub-amount', 'Monto ($)', { type: 'number', inputmode: 'decimal', value: form.amount, placeholder: '0.00' })}</div>
+          <div>${inputField('sub-day', 'Día de cobro', { type: 'number', inputmode: 'numeric', value: form.day, placeholder: '1-28' })}</div>
+        </div>
+        <div class="mt-3">
+          <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Categoría</div>
+          ${searchSelect({ id: 'sub-cat', options: categories, value: form.categoryId, action: 'sub-category', placeholder: 'Buscar categoría…' })}
+        </div>
+        <div class="mt-3">
+          <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">¿De dónde se cobra?</div>
+          ${chipRow(accounts.map((a) => chip(a.name, { selected: form.accountId === a.id, action: 'sub-account', payload: a.id })))}
+          ${cards.length ? '<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 mb-1">o con tarjeta de crédito</div>' : ''}
+          ${chipRow(cards.map((c) => chip(c.name, { selected: form.cardId === c.id, action: 'sub-card', payload: c.id })))}
+        </div>
+        ${switchRow({
+          label: 'Suscripción activa',
+          sub: 'Se cobra cada mes en el día indicado',
+          action: 'sub-active',
+          on: form.active !== false,
+        })}
+        <div class="mt-3">${inputField('sub-notes', 'Notas (opcional)', { value: form.notes, rows: 2 })}</div>
+        <button data-action="sub-save" data-id="${sub?.id || ''}" class="w-full mt-4 bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98]">
+          ${sub ? 'Guardar cambios' : 'Crear suscripción'}
+        </button>
+        ${sub ? `
+          <button data-action="sub-delete" data-id="${sub.id}" class="w-full mt-2 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3">
+            Borrar suscripción
           </button>
         ` : ''}
       `);

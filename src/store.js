@@ -8,7 +8,7 @@
 // Importar JSON en el otro dispositivo.
 // ============================================================
 import { STORAGE_KEY, APP_DATA_VERSION, DEFAULT_CATEGORIES } from './models.js';
-import { todayISO, toMonthKey, round2 } from './format.js';
+import { todayISO, toMonthKey, round2, toISODate } from './format.js';
 import { availableBalance, protectedFundsTotal, totalCardDebt, msiPendingTotal, buildSnapshot } from './finance.js';
 
 const listeners = new Set();
@@ -57,8 +57,8 @@ export function emptyData() {
     ],
     creditCards: [
       { id: 'cc-azul', accountId: 'acc-tdc-azul', name: 'Tarjeta BBVA Azul', bank: 'BBVA', creditLimit: 111700, currentBalance: 0, cutDay: 12, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 111700, points: 0, active: true },
-      { id: 'cc-nu', accountId: 'acc-tdc-nu', name: 'Tarjeta Nu', bank: 'Nu', creditLimit: 0, currentBalance: 0, cutDay: null, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 0, points: 0, active: true },
-      { id: 'cc-mp', accountId: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', bank: 'Mercado Pago', creditLimit: 0, currentBalance: 0, cutDay: null, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 0, points: 0, active: true },
+      { id: 'cc-nu', accountId: 'acc-tdc-nu', name: 'Tarjeta Nu', bank: 'Nu', creditLimit: 0, currentBalance: 0, cutDay: 6, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 0, points: 0, active: true },
+      { id: 'cc-mp', accountId: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', bank: 'Mercado Pago', creditLimit: 0, currentBalance: 0, cutDay: 21, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 0, points: 0, active: true },
     ],
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     funds: [
@@ -70,6 +70,7 @@ export function emptyData() {
       { id: 'f-pagos-tdc', name: 'Pagos TDC', currentAmount: 0, protected: true, active: true, purpose: 'Respaldo de compras con tarjeta' },
     ],
     installmentPurchases: [],
+    subscriptions: [],
     services: [],
     goals: [],
     budgets: [],
@@ -87,8 +88,8 @@ export function emptyData() {
  * fechas ni pagos.
  */
 export const SEED_CARDS = [
-  { cardId: 'cc-nu', accountId: 'acc-tdc-nu', name: 'Tarjeta Nu', bank: 'Nu' },
-  { cardId: 'cc-mp', accountId: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', bank: 'Mercado Pago' },
+  { cardId: 'cc-nu', accountId: 'acc-tdc-nu', name: 'Tarjeta Nu', bank: 'Nu', cutDay: 6 },
+  { cardId: 'cc-mp', accountId: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', bank: 'Mercado Pago', cutDay: 21 },
 ];
 
 /**
@@ -101,6 +102,7 @@ export function normalizeData(input) {
   data.settings = { currency: 'MXN', reminders: true, ...(data.settings || {}) };
   data.accounts = (data.accounts || []).map((a) => ({ ...a }));
   data.creditCards = (data.creditCards || []).map((c) => ({ ...c }));
+  data.subscriptions = (data.subscriptions || []).map((s) => ({ ...s }));
 
   // Enlaza por accountId o, en datos viejos, por nombre.
   for (const card of data.creditCards) {
@@ -143,7 +145,7 @@ export function normalizeData(input) {
       bank: seed.bank,
       creditLimit: 0,
       currentBalance: 0,
-      cutDay: null,
+      cutDay: seed.cutDay ?? null,
       paymentDueDay: null,
       currentNoInterestPayment: 0,
       availableCredit: 0,
@@ -163,6 +165,13 @@ export function normalizeData(input) {
         cardId: seed.cardId,
       });
     }
+  }
+
+  // Fechas de corte conocidas de Nu (6) y Mercado Pago (21): se rellenan
+  // solo si la tarjeta no tiene una ya puesta por ti.
+  for (const seed of SEED_CARDS) {
+    const card = data.creditCards.find((c) => c.id === seed.cardId || c.name === seed.name);
+    if (card && !card.cutDay && seed.cutDay) card.cutDay = seed.cutDay;
   }
 
   return data;
@@ -462,6 +471,88 @@ export function removeCard(cardId) {
     accounts: data.accounts.filter((a) => a.id !== card?.accountId),
   });
   return { ok: true };
+}
+
+/** Próximo cobro de una suscripción: día 1-28, estrictamente después de hoy. */
+export function nextChargeFor(dayOfMonth, today = new Date()) {
+  const day = Math.min(Math.max(parseInt(dayOfMonth, 10) || 1, 1), 28);
+  const hoy = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let candidate = new Date(hoy.getFullYear(), hoy.getMonth(), day);
+  if (candidate.getTime() <= hoy.getTime()) {
+    candidate = new Date(hoy.getFullYear(), hoy.getMonth() + 1, day);
+  }
+  return toISODate(candidate);
+}
+
+/** Suma un mes a una fecha ISO conservando el día (1-28). */
+function addMonthISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return toISODate(new Date(y, m, d));
+}
+
+/**
+ * Cobros automáticos de suscripciones: por cada suscripción activa vencida
+ * crea el movimiento (gasto) y avanza su próximo cobro un mes. Es idempotente:
+ * el id del movimiento incluye la fecha (`tx-sub-<id>-<fecha>`), así que
+ * reabrir la app o reprogramar nunca duplica un cargo. Si estuvo cerrada
+ * varios meses, recupera los cobros pendientes (hasta 36).
+ */
+export function chargeRecurring(data, today = todayISO(), { maxCatchUp = 36 } = {}) {
+  const subs = (data.subscriptions || []).map((s) => ({ ...s }));
+  if (!subs.length) return { data, created: [] };
+
+  let next = { ...data, subscriptions: subs };
+  const created = [];
+  const stamp = new Date().toISOString();
+
+  for (const sub of subs) {
+    if (!sub.active || !sub.amount || !sub.accountId) continue;
+    if (!sub.nextChargeDate) sub.nextChargeDate = nextChargeFor(sub.dayOfMonth, parseISODateISO(today));
+    let guard = 0;
+    while (sub.nextChargeDate <= today && guard < maxCatchUp) {
+      guard += 1;
+      const date = sub.nextChargeDate;
+      const id = `tx-sub-${sub.id}-${date}`;
+      if (!next.transactions.some((t) => t.id === id)) {
+        const tx = {
+          id,
+          date,
+          description: `${sub.name} (suscripción)`,
+          amount: round2(sub.amount),
+          type: 'expense',
+          categoryId: sub.categoryId || 'cat-suscripciones',
+          paymentMethod: sub.paymentMethod || (sub.isCreditCardPurchase ? 'Tarjeta' : 'Débito'),
+          accountId: sub.accountId,
+          cardId: sub.cardId || undefined,
+          isCreditCardPurchase: !!sub.isCreditCardPurchase,
+          isMsi: false,
+          subscriptionId: sub.id,
+          notes: sub.notes || undefined,
+          createdAt: stamp,
+          updatedAt: stamp,
+        };
+        next = applyTransactionToData(next, tx, 1);
+        next = { ...next, transactions: [...next.transactions, tx] };
+        created.push(tx);
+      }
+      sub.lastChargedAt = date;
+      sub.nextChargeDate = addMonthISO(date);
+    }
+  }
+
+  return { data: next, created };
+}
+
+function parseISODateISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+/** Aplica los cobros automáticos al almacén y avisa a la UI. */
+export function runRecurringCharges(today = todayISO()) {
+  const result = chargeRecurring(get(), today);
+  if (result.created.length) persist(result.data);
+  return result.created;
 }
 
 export function updateCollection(collection, item) {
