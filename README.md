@@ -71,6 +71,29 @@ y queda instalada con su icono. Es un APK **debug** (firmado con la llave de dep
 sirve perfecto para uso personal; si algún día quieres publicarlo en Play Store hay que
 firmarlo con una llave propia (`assembleRelease` + keystore).
 
+### Actualizar el APK por WiFi (sin perder datos)
+
+El celular y la computadora en la misma red; no hace falta cable:
+
+```
+npm run android:apk
+mkdir -p /tmp/mcf-wifi && cp android/app/build/outputs/apk/debug/app-debug.apk \
+  /tmp/mcf-wifi/mi-control-financiero-1.1.apk
+python3 -m http.server 8000 --directory /tmp/mcf-wifi   # queda sirviendo en la LAN
+```
+
+Abre en el navegador del celular `http://<IP-de-tu-PC>:8000/` (la IP sale con
+`ip -4 addr show scope global`), descarga el APK y tócalo. Al instalar **encima** de la app
+existente (misma `applicationId` y misma firma) Android la actualiza y **conserva el
+`localStorage`**: movimientos, saldos y apartados siguen intactos. Reglas:
+
+- **No desinstales** la app antes de actualizar (desinstalar sí borra los datos).
+- Sube `versionCode` en `android/app/build.gradle` en cada entrega (hoy va en 2 / 1.1) para
+  que el instalador la trate como actualización.
+- Si algún día cambia la llave de firma, Android rechaza la actualización; habría que
+  exportar el respaldo JSON e importarlo en la instalación nueva.
+
+
 Requisitos para compilar (una sola vez): **JDK 21** y **Android SDK** (platform 36 y
 build-tools 36). El proyecto `android/` ya está en el repo; `android/local.properties`
 apunta al SDK de tu máquina y no se versiona.
