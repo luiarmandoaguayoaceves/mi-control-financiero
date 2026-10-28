@@ -23,10 +23,56 @@ export function nextCutDate(cutDay, now = nowFn()) {
   return toISODate(candidate);
 }
 
-/** Fecha límite de pago: día 1 del mes siguiente al corte (patrón BBVA Azul). */
-export function nextDueDate(cutDay, now = nowFn()) {
+/**
+ * Fecha límite de pago. Si la tarjeta define `paymentDueDay` (día del mes en
+ * que vence el pago), se toma la primera ocurrencia DESPUÉS del próximo corte
+ * (Nu y Mercado Pago tienen fechas propias). Sin dato, se conserva la regla
+ * vieja (día 1 del mes siguiente al corte, patrón BBVA Azul).
+ */
+export function nextDueDate(cutDay, paymentDueDay = null, now = nowFn()) {
   const cut = parseDate(nextCutDate(cutDay, now));
-  return toISODate(new Date(cut.getFullYear(), cut.getMonth() + 1, 1));
+  const day = Number(paymentDueDay);
+  if (!Number.isFinite(day) || day < 1 || day > 28) {
+    return toISODate(new Date(cut.getFullYear(), cut.getMonth() + 1, 1));
+  }
+  let due = new Date(cut.getFullYear(), cut.getMonth(), day);
+  if (due.getTime() <= cut.getTime()) due = new Date(cut.getFullYear(), cut.getMonth() + 1, day);
+  return toISODate(due);
+}
+
+/** Fechas y conteos de una tarjeta; null en lo que no esté configurado. */
+export function cardDates(card, now = nowFn()) {
+  if (!card || !card.cutDay) {
+    return { cutDate: null, dueDate: null, daysToCut: null, daysToDue: null, cycle: null };
+  }
+  const cycle = currentCycleRange(card.cutDay, now);
+  const dueDate = nextDueDate(card.cutDay, card.paymentDueDay, now);
+  return {
+    cutDate: cycle.end,
+    dueDate,
+    daysToCut: daysUntilISO(cycle.end, now),
+    daysToDue: daysUntilISO(dueDate, now),
+    cycle,
+  };
+}
+
+/**
+ * Resumen de una tarjeta: fechas del corte, compras de contado del ciclo,
+ * MSI que le pertenecen y el pago proyectado de su corte. Los MSI viejos sin
+ * cardId se asignan a la primera tarjeta.
+ */
+export function cardSummary(data, card, now = nowFn()) {
+  const firstCardId = data.creditCards[0]?.id;
+  const creditIds = data.accounts
+    .filter((a) => a.type === 'credit' && (a.cardId === card.id || a.id === card.accountId))
+    .map((a) => a.id);
+  const dates = cardDates(card, now);
+  const compras = dates.cycle ? tdcBackingNeeded(data.transactions, creditIds, dates.cycle) : 0;
+  const msi = data.installmentPurchases.filter(
+    (i) => i.active && i.pendingBalance > 0 && (i.cardId || firstCardId) === card.id,
+  );
+  const msiMes = msiMonthlyTotal(msi);
+  return { dates, compras, msi, msiMes, creditIds, pago: nextTdcPayment(compras, msiMes) };
 }
 
 /** Ciclo actual de la tarjeta: [último corte, próximo corte). */
@@ -75,8 +121,10 @@ export function protectedFundsTotal(funds) {
 // ---------- Respaldo de TDC ----------
 
 /**
- * Monto a respaldar con efectivo: compras TDC del ciclo actual posteriores
- * al último pago. Cada peso gastado con TDC debe tener un peso de respaldo.
+ * Monto a pagar en el corte por compras de contado: compras TDC del ciclo
+ * actual posteriores al último pago. Las compras a MSI NO entran aquí: de
+ * ellas solo se paga la mensualidad (ver msiMonthlyTotal), nunca el total
+ * en la fecha de corte.
  */
 export function tdcBackingNeeded(transactions, creditAccountIds, cycle) {
   const credit = new Set(creditAccountIds);
@@ -91,6 +139,7 @@ export function tdcBackingNeeded(transactions, creditAccountIds, cycle) {
   for (const t of transactions) {
     if (!credit.has(t.accountId)) continue;
     if (t.type !== 'expense' || !t.isCreditCardPurchase) continue;
+    if (t.isMsi) continue; // a meses: se paga la mensualidad, no el total en el corte
     if (t.date < cycle.start || t.date >= cycle.end) continue;
     if (t.date <= lastPayment) continue; // ya cubierto por un pago posterior
     purchases += t.amount;

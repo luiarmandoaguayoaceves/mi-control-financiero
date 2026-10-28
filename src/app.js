@@ -2,7 +2,7 @@
 // app.js — arranque, hash router, acciones (event delegation), tema.
 // ============================================================
 import { store, state } from './screens/appState.js';
-import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, addFund, removeFund, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
+import { load, subscribe, addTransaction, updateTransaction, deleteTransaction, fundMovement, addFund, removeFund, addCard, removeCard, updateCollection, removeFromCollection, updateSettings, importJSON, exportJSON, resetData } from './store.js';
 import { advanceInstallmentPayment, createInstallment } from './finance.js';
 import { renderDashboard } from './screens/dashboard.js';
 import { renderMovements } from './screens/movements.js';
@@ -16,9 +16,12 @@ import { renderAssets } from './screens/assets.js';
 import { renderReports } from './screens/reports.js';
 import { renderSettings } from './screens/settings.js';
 import { renderModal } from './screens/modals.js';
+import { syncReminders } from './reminders.js';
+import { updateHomeWidget } from './widget.js';
+import { SystemBars, LocalNotifications, isNativePlatform } from './native.js';
 import { txRow, empty as emptyHtml, shouldIgnoreBackdropClick, installPromptState, installBannerHtml, isNativeShell } from './ui.js';
 import { THEME_KEY, STORAGE_KEY } from './models.js';
-import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero, setTimeOffset, money } from './format.js';
+import { todayISO, shiftMonthKey, parseAmount, parseAmountOrZero, setTimeOffset, money, round2 } from './format.js';
 
 const app = document.getElementById('app');
 
@@ -41,11 +44,10 @@ function applyTheme() {
 function syncSystemBars(dark) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', dark ? '#0f172a' : '#ffffff');
-  try {
-    window.Capacitor?.Plugins?.SystemBars?.setStyle({ style: dark ? 'DARK' : 'LIGHT' });
-  } catch {
+  if (!isNativePlatform()) return;
+  Promise.resolve(SystemBars.setStyle({ style: dark ? 'DARK' : 'LIGHT' })).catch(() => {
     /* En el navegador no existe el plugin: no pasa nada. */
-  }
+  });
 }
 
 let isDark = applyTheme();
@@ -259,6 +261,32 @@ function syncTxFormFromDom() {
   modal.form.notes = val('tx-notes') ?? modal.form.notes;
   modal.form.amount = val('tx-amount') ?? modal.form.amount;
   modal.form.date = val('tx-date') ?? modal.form.date;
+  modal.form.msiMonthly = val('tx-msi-monthly') ?? modal.form.msiMonthly;
+  modal.form.msiMonths = val('tx-msi-months') ?? modal.form.msiMonths;
+}
+
+/** Formulario del modal a partir de un movimiento existente (para editar). */
+function txFormFromTx(tx) {
+  const acc = store.data.accounts.find((a) => a.id === tx.accountId);
+  const card = store.data.creditCards.find((c) => c.id === tx.cardId)
+    || (acc?.cardId ? store.data.creditCards.find((c) => c.id === acc.cardId) : undefined);
+  return {
+    type: tx.type,
+    date: tx.date,
+    description: tx.description,
+    amount: String(tx.amount),
+    categoryId: tx.categoryId,
+    paymentMethod: tx.paymentMethod,
+    accountId: acc && acc.type !== 'credit' ? tx.accountId : '',
+    toAccountId: tx.toAccountId || '',
+    fundId: tx.fundId || '',
+    isTdc: !!tx.isCreditCardPurchase,
+    isMsi: !!tx.isMsi,
+    msiMonths: '',
+    msiMonthly: '',
+    cardId: card?.id || '',
+    notes: tx.notes || '',
+  };
 }
 
 function saveTx() {
@@ -270,9 +298,27 @@ function saveTx() {
   const amt = parseAmount(f.amount);
   if (!amt) return showToast('Revisa el monto: debe ser mayor a cero');
   if (!f.description.trim()) return showToast('Escribe una descripción');
-  const acc = data.accounts.find((a) => a.id === f.accountId) || data.accounts.find((a) => a.type !== 'credit' && a.active) || data.accounts[0];
-  if (!acc) return showToast('Crea una cuenta primero');
-  const isCardPurchase = f.type === 'expense' && f.isTdc && acc.type === 'credit';
+
+  const cards = data.creditCards.filter((c) => c.active);
+  const card = cards.find((c) => c.id === f.cardId) || cards[0];
+  const isCardPurchase = f.type === 'expense' && f.isTdc && !!card;
+  const cashAccount = data.accounts.find((a) => a.id === f.accountId && a.type !== 'credit')
+    || data.accounts.find((a) => a.type !== 'credit' && a.active);
+
+  // Compra TDC: el movimiento pega en la cuenta de la TARJETA (crédito).
+  // Pago de tarjeta: el dinero sale de una cuenta de débito/efectivo.
+  const cardAccount = card
+    ? data.accounts.find((a) => a.cardId === card.id || a.id === card.accountId)
+    : undefined;
+  const accountId = isCardPurchase ? cardAccount?.id : cashAccount?.id;
+  if (!accountId) return showToast('Crea una cuenta primero');
+
+  const monthly = parseAmount(f.msiMonthly);
+  const months = parseInt(f.msiMonths, 10);
+  if (isCardPurchase && f.isMsi && (!monthly || !(months > 0))) {
+    return showToast('Completa mensualidad y meses del MSI');
+  }
+
   let cat = f.categoryId;
   if (f.type === 'income') cat = 'cat-ingreso';
   if (f.type === 'creditPayment') cat = 'cat-tdc-pago';
@@ -285,11 +331,12 @@ function saveTx() {
     type: f.type,
     categoryId: cat,
     paymentMethod: f.paymentMethod,
-    accountId: acc.id,
+    accountId,
+    cardId: isCardPurchase || f.type === 'creditPayment' ? card?.id : undefined,
     fundId: f.fundId || undefined,
     toAccountId: f.type === 'transfer' ? f.toAccountId || undefined : undefined,
     isCreditCardPurchase: isCardPurchase,
-    isPending: f.isPending,
+    isMsi: isCardPurchase && !!f.isMsi,
     notes: f.notes?.trim() || undefined,
   };
 
@@ -298,7 +345,22 @@ function saveTx() {
     showToast('Movimiento actualizado');
   } else {
     addTransaction(input);
-    showToast('Movimiento guardado');
+    if (isCardPurchase && f.isMsi) {
+      updateCollection('installmentPurchases', {
+        id: `msi-${Date.now()}`,
+        cardId: card.id,
+        ...createInstallment({
+          description: input.description,
+          monthlyPayment: monthly,
+          totalMonths: months,
+          paidCount: 0,
+          interestRate: 0,
+        }),
+      });
+      showToast('Compra a MSI registrada');
+    } else {
+      showToast('Movimiento guardado');
+    }
   }
   state.modal = null;
   render();
@@ -353,10 +415,12 @@ function handleAction(action, payload, el) {
       state.modal = { kind: 'newTx', form: defaultTxForm() };
       render();
       break;
-    case 'edit-tx':
-      state.modal = { kind: 'newTx', id: el.dataset.id, form: defaultTxForm() };
+    case 'edit-tx': {
+      const tx = store.data.transactions.find((t) => t.id === el.dataset.id);
+      state.modal = { kind: 'newTx', id: el.dataset.id, form: tx ? txFormFromTx(tx) : defaultTxForm() };
       render();
       break;
+    }
     case 'tx-type':
       syncTxFormFromDom();
       state.modal.form.type = payload;
@@ -392,9 +456,14 @@ function handleAction(action, payload, el) {
       state.modal.form.isTdc = !state.modal.form.isTdc;
       render();
       break;
-    case 'tx-pending':
+    case 'tx-card':
       syncTxFormFromDom();
-      state.modal.form.isPending = !state.modal.form.isPending;
+      state.modal.form.cardId = payload;
+      render();
+      break;
+    case 'tx-msi':
+      syncTxFormFromDom();
+      state.modal.form.isMsi = !state.modal.form.isMsi;
       render();
       break;
     case 'tx-save':
@@ -628,7 +697,7 @@ function handleAction(action, payload, el) {
       if (existing) {
         updateCollection('installmentPurchases', { ...existing, ...fresh });
       } else {
-        const cardId = (store.data.creditCards.find((c) => c.active) || store.data.creditCards[0])?.id;
+        const cardId = (store.data.creditCards.find((c) => c.id === state.cardId) || store.data.creditCards.find((c) => c.active) || store.data.creditCards[0])?.id;
         updateCollection('installmentPurchases', { id: `msi-${Date.now()}`, cardId, ...fresh });
       }
       state.modal = null;
@@ -670,21 +739,71 @@ function handleAction(action, payload, el) {
       render();
       break;
     }
+    case 'card-select':
+      state.cardId = payload;
+      render();
+      break;
+    case 'card-add':
+      state.modal = { kind: 'editCard', cardId: null };
+      render();
+      break;
     case 'card-edit':
-      state.modal = { kind: 'editCard' };
+      state.modal = { kind: 'editCard', cardId: el.dataset.id || null };
       render();
       break;
     case 'card-save': {
-      const cut = parseInt(document.getElementById('modal-cutday')?.value, 10);
-      const limit = parseAmount(document.getElementById('modal-limit')?.value);
-      const c = store.data.creditCards.find((x) => x.active) || store.data.creditCards[0];
-      if (c) updateCollection('creditCards', {
-        ...c,
-        cutDay: Number.isFinite(cut) && cut >= 1 && cut <= 28 ? cut : c.cutDay,
-        creditLimit: limit ?? c.creditLimit,
-        availableCredit: limit ? limit - c.currentBalance : c.availableCredit,
-      });
+      const id = el.dataset.id;
+      const name = document.getElementById('card-name')?.value?.trim();
+      const bank = document.getElementById('card-bank')?.value?.trim() || '';
+      const limit = parseAmountOrZero(document.getElementById('card-limit')?.value) ?? 0;
+      const cut = parseInt(document.getElementById('card-cutday')?.value, 10);
+      const due = parseInt(document.getElementById('card-dueday')?.value, 10);
+      const day = (n) => (Number.isFinite(n) && n >= 1 && n <= 28 ? n : null);
+      if (!name) return showToast('Escribe el nombre de la tarjeta');
+      if (id) {
+        const c = store.data.creditCards.find((x) => x.id === id);
+        if (c) {
+          updateCollection('creditCards', {
+            ...c,
+            name,
+            bank,
+            creditLimit: limit,
+            availableCredit: round2(Math.max(0, limit - c.currentBalance)),
+            cutDay: day(cut),
+            paymentDueDay: day(due),
+          });
+          const account = store.data.accounts.find((a) => a.id === c.accountId || a.cardId === c.id);
+          if (account) {
+            updateCollection('accounts', {
+              ...account,
+              name,
+              institution: bank,
+              creditLimit: limit,
+              availableCredit: round2(Math.max(0, limit - c.currentBalance)),
+            });
+          }
+          state.cardId = id;
+        }
+      } else {
+        const created = addCard({ name, bank, creditLimit: limit, cutDay: cut, paymentDueDay: due });
+        if (created) state.cardId = created.id;
+      }
       state.modal = null;
+      showToast(id ? 'Tarjeta actualizada' : 'Tarjeta agregada');
+      render();
+      break;
+    }
+    case 'card-delete': {
+      const card = store.data.creditCards.find((x) => x.id === el.dataset.id);
+      openConfirm('Borrar tarjeta', `¿Borrar "${card?.name}"? Solo se puede si está en $0 y sin movimientos.`, 'confirm-delete-card', el.dataset.id);
+      break;
+    }
+    case 'confirm-delete-card': {
+      const result = removeCard(el.dataset.id);
+      state.modal = null;
+      if (!result.ok) return showToast(`No se puede borrar: ${result.reason}`);
+      if (state.cardId === el.dataset.id) state.cardId = null;
+      showToast('Tarjeta borrada');
       render();
       break;
     }
@@ -724,6 +843,33 @@ function handleAction(action, payload, el) {
       showToast('Datos restablecidos');
       render();
       break;
+    case 'notif-permission': {
+      if (!isNativePlatform()) return showToast('Las notificaciones del sistema solo existen dentro del APK');
+      LocalNotifications.requestPermissions()
+        .then((p) => {
+          if (p?.display === 'granted') {
+            showToast('Permiso de notificaciones concedido');
+            scheduleReminderSync();
+          } else {
+            showToast('Permiso denegado: actívalo en los ajustes de Android');
+          }
+        })
+        .catch(() => showToast('No se pudo pedir el permiso'));
+      break;
+    }
+    case 'widget-refresh': {
+      if (!isNativePlatform()) return showToast('El widget solo existe dentro del APK');
+      updateHomeWidget(store.data)
+        .then((r) => showToast(r?.ok ? 'Widget actualizado' : 'No se pudo actualizar el widget'))
+        .catch(() => showToast('No se pudo actualizar el widget'));
+      break;
+    }
+    case 'reminders-toggle': {
+      const enable = store.data.settings.reminders === false;
+      updateSettings({ reminders: enable });
+      showToast(enable ? 'Recordatorios activados' : 'Recordatorios desactivados');
+      break;
+    }
     case 'toggle-theme':
       isDark = !isDark;
       document.documentElement.classList.toggle('dark', isDark);
@@ -767,7 +913,10 @@ function defaultTxForm() {
     toAccountId: '',
     fundId: '',
     isTdc: false,
-    isPending: false,
+    isMsi: false,
+    msiMonths: '',
+    msiMonthly: '',
+    cardId: (data.creditCards.find((c) => c.active) || data.creditCards[0])?.id || '',
     notes: '',
   };
 }
@@ -845,6 +994,22 @@ app.addEventListener('change', (e) => {
       modal.form.date = el.value;
       render();
     }
+  }
+});
+
+/**
+ * Buscador de los selectores de categoría: filtra las opciones en el DOM
+ * (sin re-renderizar) para que el teclado no pierda el foco al escribir.
+ */
+app.addEventListener('input', (e) => {
+  const el = e.target;
+  const listId = el instanceof HTMLInputElement ? el.dataset.ssFilter : null;
+  if (!listId) return;
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const q = el.value.trim().toLowerCase();
+  for (const option of list.querySelectorAll('[data-ss-option]')) {
+    option.hidden = q.length > 0 && !option.textContent.toLowerCase().includes(q);
   }
 });
 
@@ -936,9 +1101,24 @@ window.addEventListener('hashchange', () => {
   render();
 });
 
+// ---------- Recordatorios del sistema (solo APK) ----------
+
+let reminderTimer = null;
+
+/** Sincroniza avisos del sistema y widget (solo APK), con anti-rebote. */
+function scheduleReminderSync() {
+  if (!isNativeApp()) return;
+  clearTimeout(reminderTimer);
+  reminderTimer = setTimeout(() => {
+    syncReminders(store.data, { now: new Date() }).catch(() => {});
+    updateHomeWidget(store.data).catch(() => {});
+  }, 1200);
+}
+
 store.data = load();
 parseHash();
 render();
+scheduleReminderSync();
 syncClock().then(() => {
   lastDay = todayISO();
   render();
@@ -946,4 +1126,5 @@ syncClock().then(() => {
 subscribe((data) => {
   store.data = data;
   render();
+  scheduleReminderSync();
 });

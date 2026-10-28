@@ -1,6 +1,6 @@
 // Render de modales (nuevo/editar movimiento, apartados, metas, confirmación…).
 import { store, state } from './appState.js';
-import { esc, chip, chipRow, inputField } from '../ui.js';
+import { esc, chip, chipRow, inputField, searchSelect, switchRow } from '../ui.js';
 import { todayISO, money } from '../format.js';
 import { CATEGORY_IDS, PAYMENT_METHODS, TRANSACTION_TYPE_LABELS } from '../models.js';
 
@@ -56,6 +56,7 @@ export function renderNewTxModal() {
   const data = store.data;
   const modal = state.modal;
   const editing = modal.id ? data.transactions.find((t) => t.id === modal.id) : undefined;
+  const cards = data.creditCards.filter((c) => c.active);
   const form = modal.form || {
     type: editing?.type || 'expense',
     date: editing?.date || todayISO(),
@@ -67,18 +68,19 @@ export function renderNewTxModal() {
     toAccountId: editing?.toAccountId || '',
     fundId: editing?.fundId || '',
     isTdc: editing?.isCreditCardPurchase || false,
-    isPending: editing?.isPending || false,
+    isMsi: editing?.isMsi || false,
+    msiMonths: '',
+    msiMonthly: '',
+    cardId: editing?.cardId || cards[0]?.id || '',
     notes: editing?.notes || '',
   };
 
-  const accounts = data.accounts.filter((a) => a.active);
-  const debitAccounts = accounts.filter((a) => a.type !== 'credit');
-  const creditAccounts = accounts.filter((a) => a.type === 'credit');
+  const accounts = data.accounts.filter((a) => a.active && a.type !== 'credit');
   const categories = data.categories.filter((c) => c.active);
   const expenseCategories = categories.filter((c) => c.group !== 'Ingreso');
   const funds = data.funds.filter((f) => f.active);
-  const tdcEnabled = form.type === 'expense' && creditAccounts.length > 0;
-  const showAccount = form.type !== 'transfer' ? accounts : debitAccounts;
+  const tdcEnabled = form.type === 'expense' && cards.length > 0;
+  const selectedCard = cards.find((c) => c.id === form.cardId) || cards[0];
 
   const types = ['expense', 'income', 'transfer', 'creditPayment'];
 
@@ -96,7 +98,48 @@ export function renderNewTxModal() {
     ${form.type === 'expense' || form.type === 'income' ? `
       <div class="mt-3">
         <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Categoría</div>
-        ${chipRow((form.type === 'expense' ? expenseCategories : categories).map((c) => chip(c.name, { selected: form.categoryId === c.id, action: 'tx-category', payload: c.id })))}
+        ${searchSelect({
+          id: 'tx-cat',
+          options: form.type === 'expense' ? expenseCategories : categories,
+          value: form.categoryId,
+          action: 'tx-category',
+          placeholder: 'Buscar categoría…',
+        })}
+      </div>
+    ` : ''}
+
+    ${tdcEnabled ? `
+      ${switchRow({
+        label: 'Compra con tarjeta de crédito',
+        sub: selectedCard?.name || '',
+        action: 'tx-tdc',
+        on: form.isTdc,
+      })}
+      ${form.isTdc ? `
+        <div class="mt-3">
+          <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">¿Con qué tarjeta?</div>
+          ${chipRow(cards.map((c) => chip(c.name, { selected: form.cardId === c.id || (!form.cardId && c.id === cards[0].id), action: 'tx-card', payload: c.id })))}
+        </div>
+        ${switchRow({
+          label: 'Es a meses (MSI)',
+          sub: 'Solo se paga la mensualidad, no el total en la fecha de corte',
+          action: 'tx-msi',
+          on: form.isMsi,
+        })}
+        ${form.isMsi ? `
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <div>${inputField('tx-msi-monthly', 'Mensualidad ($)', { type: 'number', value: form.msiMonthly, inputmode: 'decimal', placeholder: '0.00' })}</div>
+            <div>${inputField('tx-msi-months', 'Meses', { type: 'number', value: form.msiMonths, inputmode: 'numeric', placeholder: '12' })}</div>
+          </div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Se registra en Tarjeta → Compras a MSI para que solo cuente la mensualidad del mes.</p>
+        ` : ''}
+      ` : ''}
+    ` : ''}
+
+    ${form.type === 'creditPayment' ? `
+      <div class="mt-3">
+        <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">¿Qué tarjeta pagas?</div>
+        ${chipRow(cards.map((c) => chip(c.name, { selected: form.cardId === c.id || (!form.cardId && c.id === cards[0].id), action: 'tx-card', payload: c.id })))}
       </div>
     ` : ''}
 
@@ -106,27 +149,15 @@ export function renderNewTxModal() {
     </div>
 
     <div class="mt-3">
-      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Cuenta</div>
-      ${chipRow(showAccount.map((a) => chip(a.name, { selected: form.accountId === a.id, action: 'tx-account', payload: a.id })))}
+      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">${form.type === 'creditPayment' ? 'Cuenta de donde sale el pago' : 'Cuenta'}</div>
+      ${chipRow(accounts.map((a) => chip(a.name, { selected: form.accountId === a.id, action: 'tx-account', payload: a.id })))}
     </div>
 
     ${form.type === 'transfer' ? `
       <div class="mt-3">
         <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Cuenta destino</div>
-        ${chipRow(debitAccounts.map((a) => chip(a.name, { selected: form.toAccountId === a.id, action: 'tx-toaccount', payload: a.id })))}
+        ${chipRow(accounts.map((a) => chip(a.name, { selected: form.toAccountId === a.id, action: 'tx-toaccount', payload: a.id })))}
       </div>
-    ` : ''}
-
-    ${tdcEnabled ? `
-      <button data-action="tx-tdc" class="w-full mt-3 flex items-center justify-between bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-2.5">
-        <span class="text-left">
-          <span class="block text-sm font-semibold text-slate-900 dark:text-slate-100">Compra con tarjeta de crédito</span>
-          <span class="block text-[11px] text-slate-500 dark:text-slate-400">Se suma al respaldo TDC (debe cubrirse con efectivo)</span>
-        </span>
-        <span class="w-11 h-6 rounded-full p-0.5 ${form.isTdc ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}">
-          <span class="block w-5 h-5 bg-white rounded-full transition ${form.isTdc ? 'ml-auto' : ''}"></span>
-        </span>
-      </button>
     ` : ''}
 
     ${form.type === 'income' && funds.length > 0 ? `
@@ -135,13 +166,6 @@ export function renderNewTxModal() {
         ${chipRow(funds.map((f) => chip(f.name, { selected: form.fundId === f.id, action: 'tx-fund', payload: f.id })))}
       </div>
     ` : ''}
-
-    <button data-action="tx-pending" class="w-full mt-3 flex items-center justify-between bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-2.5">
-      <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Pendiente</span>
-      <span class="w-11 h-6 rounded-full p-0.5 ${form.isPending ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}">
-        <span class="block w-5 h-5 bg-white rounded-full transition ${form.isPending ? 'ml-auto' : ''}"></span>
-      </span>
-    </button>
 
     <div class="mt-3">${inputField('tx-notes', 'Notas (opcional)', { value: form.notes, rows: 2 })}</div>
 
@@ -249,11 +273,28 @@ export function renderModal() {
     }
 
     case 'editCard': {
-      const c = data.creditCards.find((x) => x.active) || data.creditCards[0];
-      return moneyModal('editCard', 'Editar tarjeta', [
-        { id: 'modal-cutday', label: 'Día de corte (1-28)', opts: { type: 'number', value: c ? String(c.cutDay) : '' } },
-        { id: 'modal-limit', label: 'Línea de crédito ($)', opts: { type: 'number', inputmode: 'decimal', value: c ? String(c.creditLimit) : '' } },
-      ], 'Guardar', 'card-save');
+      const c = modal.cardId ? data.creditCards.find((x) => x.id === modal.cardId) : null;
+      return modalShell(`
+        ${modalHeader(c ? `Tarjeta: ${c.name}` : 'Nueva tarjeta', 'Datos y fechas para tus recordatorios')}
+        <div class="mb-3">${inputField('card-name', 'Nombre', { value: c?.name || '', placeholder: 'Ej. Tarjeta Nu' })}</div>
+        <div class="mb-3">${inputField('card-bank', 'Banco / emisor', { value: c?.bank || '', placeholder: 'Nu, Mercado Pago, BBVA…' })}</div>
+        <div class="mb-3">${inputField('card-limit', 'Línea de crédito ($)', { type: 'number', inputmode: 'decimal', value: c ? String(c.creditLimit) : '', placeholder: '0.00' })}</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>${inputField('card-cutday', 'Día de corte', { type: 'number', inputmode: 'numeric', value: c?.cutDay ? String(c.cutDay) : '', placeholder: '1-28' })}</div>
+          <div>${inputField('card-dueday', 'Día límite de pago', { type: 'number', inputmode: 'numeric', value: c?.paymentDueDay ? String(c.paymentDueDay) : '', placeholder: '1-28' })}</div>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+          Ejemplo Nu: corte el día 5 y pago el 25. Si tu fecha límite cae el mes siguiente al corte, pon el día real (p. ej. 2).
+        </p>
+        <button data-action="card-save" data-id="${c?.id || ''}" class="w-full mt-4 bg-indigo-600 text-white font-bold rounded-xl py-3 active:scale-[0.98]">
+          ${c ? 'Guardar tarjeta' : 'Crear tarjeta'}
+        </button>
+        ${c && data.creditCards.length > 1 ? `
+          <button data-action="card-delete" data-id="${c.id}" class="w-full mt-2 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 font-bold rounded-xl py-3">
+            Borrar tarjeta
+          </button>
+        ` : ''}
+      `);
     }
 
     case 'msi': {

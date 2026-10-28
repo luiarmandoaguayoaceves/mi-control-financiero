@@ -1,6 +1,6 @@
 // Pantalla Configuración: exportar/importar, cuentas, tarjeta, categorías.
 import { store, state } from './appState.js';
-import { section, empty } from '../ui.js';
+import { section, empty, switchRow } from '../ui.js';
 import { money } from '../format.js';
 
 export function renderSettings() {
@@ -19,7 +19,7 @@ export function renderSettings() {
         <div class="text-[11px] text-slate-500 dark:text-slate-400">El ingreso estimado solo se usa para % de MSI y tasa de ahorro.</div>
       `)}
 
-      ${section('Cuentas', data.accounts.map((a) => `
+      ${section('Cuentas', data.accounts.filter((a) => a.type !== 'credit').map((a) => `
         <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 py-2 last:border-0">
           <div class="flex-1 min-w-0">
             <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${a.name}</div>
@@ -30,15 +30,48 @@ export function renderSettings() {
         </div>
       `).join(''))}
 
-      ${card ? section('Tarjeta de crédito', `
-        <div class="flex items-center gap-2">
-          <div class="flex-1 min-w-0">
-            <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${card.name}</div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400">Corte día ${card.cutDay} · Línea ${money(card.creditLimit)} · ${card.points} pts</div>
-          </div>
-          <button data-action="card-edit" class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[11px] px-2 py-1 rounded-lg">Editar</button>
+      ${section('Tarjetas de crédito',
+        (data.creditCards.length
+          ? data.creditCards.map((c) => `
+            <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 py-2 last:border-0">
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">${c.name}</div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                  ${c.cutDay ? `Corte día ${c.cutDay}` : 'Corte sin configurar'}${c.paymentDueDay ? ` · Pago día ${c.paymentDueDay}` : ''} · Línea ${money(c.creditLimit)}
+                </div>
+              </div>
+              <button data-action="card-edit" data-id="${c.id}" class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[11px] px-2 py-1 rounded-lg">Editar</button>
+            </div>
+          `).join('')
+          : '<div class="text-[11px] text-slate-500 dark:text-slate-400">Sin tarjetas</div>')
+        + `<button data-action="card-add" class="w-full mt-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold text-sm rounded-xl py-2.5 active:scale-[0.98]">+ Agregar tarjeta</button>`
+      )}
+
+      ${section('Recordatorios', `
+        ${switchRow({
+          label: 'Avisos de corte y límite de pago',
+          sub: 'Dentro del APK: notificación 3 días antes y el mismo día',
+          action: 'reminders-toggle',
+          on: data.settings.reminders !== false,
+        })}
+        <button data-action="notif-permission" class="w-full mt-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-sm rounded-xl py-2.5 active:scale-[0.98]">
+          Activar permiso de notificaciones
+        </button>
+        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+          Cada tarjeta usa su propio día de corte y su día límite de pago (Configuración → Tarjetas de crédito).
         </div>
-      `) : ''}
+      `)}
+
+      ${section('Widget de pantalla de inicio', `
+        <div class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+          Mantén presionada la pantalla de inicio → <b>Widgets</b> → busca <b>Mi Control Financiero</b> →
+          arrastra <b>Resumen financiero</b>. Muestra saldo, dinero libre, próximo corte y pago.
+          Se actualiza cada vez que abres la app.
+        </div>
+        <button data-action="widget-refresh" class="w-full mt-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-sm rounded-xl py-2.5 active:scale-[0.98]">
+          Actualizar widget ahora
+        </button>
+      `)}
 
       ${section('Categorías', data.categories.map((c) => `
         <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 py-2 last:border-0">

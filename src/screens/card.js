@@ -1,56 +1,75 @@
-// Pantalla Tarjeta: resumen TDC, proyección de pago y compras MSI.
-import { store } from './appState.js';
-import { section, kpi, kpiGrid, progress, alert, empty } from '../ui.js';
-import { money, money0 } from '../format.js';
-import {
-  currentCycleRange,
-  daysUntilISO,
-  msiCount,
-  msiIncomeRatio,
-  msiMonthlyTotal,
-  msiPendingTotal,
-  nextDueDate,
-  nextTdcPayment,
-  tdcBackingNeeded,
-} from '../finance.js';
+// Pantalla Tarjeta: resumen por tarjeta (corte, límite de pago), pago
+// proyectado del corte y compras a MSI.
+import { store, state } from './appState.js';
+import { section, kpi, kpiGrid, progress, alert, empty, chip, chipRow } from '../ui.js';
+import { money, money0, formatDateShort } from '../format.js';
+import { cardSummary, msiCount, msiIncomeRatio, msiPendingTotal } from '../finance.js';
+
+function fechaConDias(iso, dias) {
+  if (!iso) return 'sin configurar';
+  const cuando = dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `en ${dias} días`;
+  return `${formatDateShort(iso)} · ${cuando}`;
+}
 
 export function renderCard() {
   const data = store.data;
-  const card = data.creditCards.find((c) => c.active) || data.creditCards[0];
-  if (!card) return empty('No hay tarjeta registrada', 'Agrégala en Configuración');
-
-  const creditIds = data.accounts.filter((a) => a.type === 'credit').map((a) => a.id);
-  const ciclo = currentCycleRange(card.cutDay);
-  const respaldo = tdcBackingNeeded(data.transactions, creditIds, ciclo);
-  const msiMes = msiMonthlyTotal(data.installmentPurchases);
+  const cards = data.creditCards.filter((c) => c.active);
+  if (!cards.length) {
+    return `<div class="p-4 pb-10">${empty('Sin tarjetas registradas', 'Agrega una en Configuración → Tarjetas de crédito')}</div>`;
+  }
+  const card = cards.find((c) => c.id === state.cardId) || cards[0];
+  const summary = cardSummary(data, card);
+  const dates = summary.dates;
+  const respaldo = summary.compras;
+  const msi = summary.msi;
+  const msiMes = summary.msiMes;
   const ratio = msiIncomeRatio(msiMes, data.settings.monthlyIncome);
-  const pago = nextTdcPayment(respaldo, msiMes);
-  const diasCorte = daysUntilISO(ciclo.end);
-  const diasLimite = daysUntilISO(nextDueDate(card.cutDay));
-  const msi = data.installmentPurchases.filter((i) => i.active && i.pendingBalance > 0);
+  const pago = summary.pago;
   const usoPct = card.creditLimit > 0 ? (card.currentBalance / card.creditLimit) * 100 : 0;
+
+  const selector = cards.length > 1
+    ? `<div class="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-3">
+        ${cards.map((c) => chip(c.name, { selected: c.id === card.id, action: 'card-select', payload: c.id })).join('')}
+      </div>`
+    : '';
 
   return `
     <div class="p-4 pb-10">
+      ${selector}
+
       ${section(card.name, `
-        <div class="flex justify-between items-center">
-          <span class="text-xs text-slate-500 dark:text-slate-400">${card.bank} · •••• Azul</span>
-          <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">${card.points} pts</span>
+        <div class="flex justify-between items-center gap-2">
+          <span class="text-xs text-slate-500 dark:text-slate-400 truncate">${card.bank || 'Tarjeta de crédito'}</span>
+          <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">${card.points || 0} pts</span>
         </div>
         <div class="text-3xl font-extrabold text-slate-900 dark:text-slate-50">${money(card.currentBalance)}</div>
         <div class="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">saldo utilizado</div>
         ${progress(usoPct, usoPct > 80 ? 'bg-red-500' : 'bg-indigo-500')}
         <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Línea: ${money0(card.creditLimit)} · Disponible: ${money0(card.availableCredit)}</div>
-        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Corte: día ${card.cutDay} (${diasCorte >= 0 ? `en ${diasCorte} días` : 'este mes'}) · Límite de pago: ${diasLimite >= 0 ? `en ${diasLimite} días` : '—'}</div>
-        ${card.notes ? `<div class="text-[11px] italic text-slate-500 dark:text-slate-400 mt-2">${card.notes}</div>` : ''}
+        ${dates.cycle ? `
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl px-3 py-2">
+              <div class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Fecha de corte</div>
+              <div class="text-sm font-bold text-slate-900 dark:text-slate-100">${fechaConDias(dates.cutDate, dates.daysToCut)}</div>
+            </div>
+            <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl px-3 py-2">
+              <div class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Límite de pago</div>
+              <div class="text-sm font-bold text-slate-900 dark:text-slate-100">${fechaConDias(dates.dueDate, dates.daysToDue)}</div>
+            </div>
+          </div>
+        ` : alert('Esta tarjeta aún no tiene día de corte ni límite de pago. Toca “Editar” para ponerlos y activar los recordatorios.', 'info')}
+        <div class="flex gap-2 mt-3">
+          <button data-action="card-edit" data-id="${card.id}" class="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold py-2.5 rounded-xl active:scale-[0.98]">Editar tarjeta</button>
+          <button data-action="card-add" class="flex-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold py-2.5 rounded-xl active:scale-[0.98]">+ Agregar tarjeta</button>
+        </div>
       `)}
 
       <div class="mt-4">
         ${kpiGrid([
-          kpi('Pago proyectado', money(pago), { color: 'indigo', sub: 'Próximo corte (dinámico)' }),
-          kpi('Compras sin respaldar', money(respaldo), { color: respaldo > 0 ? 'amber' : 'emerald', sub: 'Deben cubrirse con efectivo' }),
-          kpi('MSI mensuales', money(msiMes), { sub: `${msiCount(data.installmentPurchases)} compras activas` }),
-          kpi('Saldo MSI pendiente', money(msiPendingTotal(data.installmentPurchases)), { color: 'slate', sub: 'No es el pago del corte' }),
+          kpi('Pago del corte', money(pago), { color: 'indigo', sub: dates.cutDate ? `Corte ${formatDateShort(dates.cutDate)}` : 'Configura el corte' }),
+          kpi('Compras del ciclo', money(respaldo), { color: 'amber', sub: 'De contado (sin MSI)' }),
+          kpi('MSI mensuales', money(msiMes), { sub: `${msiCount(msi)} compras activas` }),
+          kpi('Saldo MSI pendiente', money(msiPendingTotal(msi)), { color: 'slate', sub: 'No es el pago del corte' }),
         ])}
       </div>
 
@@ -60,13 +79,13 @@ export function renderCard() {
           : ratio !== null
             ? alert(`MSI = ${ratio}% del ingreso mensual estimado`, 'info')
             : ''}
-        ${alert('El saldo total NO es el pago requerido: parte pertenece a MSI futuros.', 'info')}
+        ${alert('Las compras a MSI no se pagan completas en el corte: solo la mensualidad del mes.', 'info')}
       </div>
 
       <div class="mt-4">
         ${section(`Compras a MSI (${msi.length})`,
           msi.length === 0
-            ? empty('Sin compras MSI activas', 'Registra tus productos a meses con "+ Agregar"')
+            ? empty('Sin compras MSI activas', 'Registra tus productos a meses con “+ Agregar”')
             : msi.map((i) => {
               const done = (i.currentPaymentNumber / i.totalMonths) * 100;
               return `

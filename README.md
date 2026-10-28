@@ -96,7 +96,7 @@ El celular y la computadora en la misma red; no hace falta cable:
 ```
 npm run android:apk
 mkdir -p /tmp/mcf-wifi && cp android/app/build/outputs/apk/debug/app-debug.apk \
-  /tmp/mcf-wifi/mi-control-financiero-1.2.apk
+  /tmp/mcf-wifi/mi-control-financiero-1.3.apk
 python3 -m http.server 8000 --directory /tmp/mcf-wifi   # queda sirviendo en la LAN
 ```
 
@@ -106,7 +106,7 @@ existente (misma `applicationId` y misma firma) Android la actualiza y **conserv
 `localStorage`**: movimientos, saldos y apartados siguen intactos. Reglas:
 
 - **No desinstales** la app antes de actualizar (desinstalar sí borra los datos).
-- Sube `versionCode` en `android/app/build.gradle` en cada entrega (hoy va en 3 / 1.2) para
+- Sube `versionCode` en `android/app/build.gradle` en cada entrega (hoy va en 4 / 1.3) para
   que el instalador la trate como actualización.
 - Si algún día cambia la llave de firma, Android rechaza la actualización; habría que
   exportar el respaldo JSON e importarlo en la instalación nueva.
@@ -131,6 +131,54 @@ opcional, meta y propósito; los chips **Protegido / No protegido** deciden si c
 dinero intocable. Cada apartado permite **Ingresar**, **Retirar** y **Editar** (nombre, meta,
 propósito, protegido y **borrar**). Crear con monto inicial o borrar con dinero deja su
 movimiento en el historial, para que nunca se pierda el rastro del dinero.
+
+### Tarjetas de crédito (varias)
+
+La app maneja **una tarjeta por cuenta de crédito**: BBVA Azul, **Nu** y **Mercado Pago**
+vienen de fábrica y se pueden agregar más (Configuración → Tarjetas de crédito → **+ Agregar
+tarjeta**, o desde la pestaña Tarjeta). Cada tarjeta guarda:
+
+- **día de corte** (`cutDay`) y **día límite de pago** (`paymentDueDay`), ambos 1–28;
+- línea de crédito y saldo (el saldo lo mueven los movimientos, no se teclea);
+- su cuenta de crédito asociada (`accountId` ↔ `cardId`).
+
+Nu y Mercado Pago nacen con **fechas vacías a propósito**: la app no inventa cortes. Mientras
+no las configures, la pantalla Tarjeta muestra “Corte sin configurar” y no calcula pagos ni
+recordatorios. La migración (`normalizeData` en `store.js`) enlaza tarjeta↔cuenta y agrega
+Nu/Mercado Pago **sin tocar saldos ni movimientos** (es idempotente y también corre al
+importar un respaldo). Borrar una tarjeta solo se permite si está en $0 y sin movimientos.
+
+Cada tarjeta tiene su propio pago del corte: compras de contado del ciclo + sus MSI. La
+pestaña Tarjeta muestra un selector cuando hay más de una.
+
+### Registrar movimientos
+
+- **Categorías con buscador**: el formulario usa un selector filtrable (estilo select2) que
+  filtra en el DOM sin re-renderizar, para no perder el foco del teclado.
+- **Compra con tarjeta de crédito**: interruptor + selector de tarjeta. El movimiento pega en
+  la cuenta de esa tarjeta (no en la de débito).
+- **Es a meses (MSI)**: pide mensualidad y plazo, registra la compra en *Compras a MSI* y el
+  gasto **no** se cuenta completo en el corte: solo su mensualidad. Ya no existen los
+  interruptores “Pendiente” ni el texto de “respaldo TDC / debe cubrirse con efectivo”.
+- **Pago TDC**: ahora pregunta **qué tarjeta** pagas (antes asumía la primera).
+
+### Recordatorios de corte y pago (APK)
+
+Dentro del APK se agendan notificaciones locales (plugin `LocalNotifications`) para cada
+tarjeta con corte configurado, a las **9:00**: aviso **3 días antes** y **el mismo día** del
+límite de pago, y **2 días antes** y **el mismo día** del corte. Se reprograman los próximos
+3 meses cada vez que abres la app (ids 1–399, se cancelan antes de reagendar para no
+duplicar). Se activan/desactivan en Configuración → Recordatorios; Android pide el permiso de
+notificaciones la primera vez. En el navegador no hay notificaciones del sistema.
+
+### Widget de pantalla de inicio (APK)
+
+Widget nativo (`HomeWidgetProvider`) con el resumen de 4 líneas: saldo, dinero libre, próximo
+corte y próximo pago + MSI. La app web arma el texto (`src/widget.js` → `widgetSnapshot`) y lo
+manda por el plugin propio `HomeWidget` (`HomeWidgetPlugin.java`), que lo guarda en
+SharedPreferences (`mcf_widget`) y refresca el widget al instante. Se coloca con una pulsación
+larga en la pantalla de inicio → Widgets → **Mi Control Financiero**. Sin la app abierta se
+refresca cada ~30 min (límite del sistema) y al tocar el widget abre la app.
 
 ## Comandos
 
@@ -169,6 +217,10 @@ src/
   store.js                repositorio: localStorage (única fuente) + arranque vacío
   ui.js                   helpers de render (KPI, progress, chips, barras…)
   app.js                  arranque, router de hash, acciones, tema oscuro
+  native.js               puente a plugins nativos (LocalNotifications, HomeWidget, SystemBars)
+  reminders.js            plan y programación de avisos de corte / límite de pago
+  widget.js               resumen de 4 líneas para el widget de inicio
+  vendor/capacitor-core.js  runtime de Capacitor copiado (la app no usa bundler)
   screens/                dashboard, movements, card, funds, services, goals,
                           budget, assets, reports, settings, more, modals
 tests/                    node --test (finance, format, smoke, wiring)

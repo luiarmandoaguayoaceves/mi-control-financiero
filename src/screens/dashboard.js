@@ -1,12 +1,11 @@
 // Pantalla Inicio / Dashboard: KPIs y alertas financieras.
 import { store } from './appState.js';
 import { card, section, kpi, kpiGrid, progress, alert, empty, primaryBtn } from '../ui.js';
-import { money, money0, todayMonthKey, todayISO, formatDate } from '../format.js';
+import { money, money0, todayMonthKey, todayISO, formatDate, round2 } from '../format.js';
 import {
   availableBalance,
   budgetStatus,
-  currentCycleRange,
-  daysUntilISO,
+  cardSummary,
   emergencyCoverageMonths,
   essentialMonthlyFromServices,
   essentialPending,
@@ -14,11 +13,8 @@ import {
   msiMonthlyTotal,
   msiPendingTotal,
   netWorth,
-  nextDueDate,
-  nextTdcPayment,
   protectedFundsTotal,
   spentByCategory,
-  tdcBackingNeeded,
   totalCardDebt,
   totalFunds,
   monthSpent,
@@ -28,17 +24,17 @@ export function renderDashboard() {
   const data = store.data;
   const accounts = data.accounts;
   const cards = data.creditCards;
-  const card_ = cards.find((c) => c.active);
+  const activeCards = cards.filter((c) => c.active);
   const saldo = availableBalance(accounts);
   const apartados = totalFunds(data.funds);
   const protegido = protectedFundsTotal(data.funds);
   const mes = todayMonthKey();
   const gastoMes = monthSpent(data.transactions, mes);
-  const creditIds = accounts.filter((a) => a.type === 'credit').map((a) => a.id);
-  const ciclo = card_ ? currentCycleRange(card_.cutDay) : null;
-  const respaldo = ciclo ? tdcBackingNeeded(data.transactions, creditIds, ciclo) : 0;
+  // Cada tarjeta con corte configurado aporta su pago del ciclo.
+  const summaries = activeCards.filter((c) => c.cutDay).map((c) => ({ card: c, ...cardSummary(data, c) }));
+  const respaldo = round2(summaries.reduce((acc, s) => acc + s.compras, 0));
   const msiMes = msiMonthlyTotal(data.installmentPurchases);
-  const proximoPago = nextTdcPayment(respaldo, msiMes);
+  const proximoPago = round2(respaldo + msiMes);
   const deudaTDC = totalCardDebt(cards);
   const esencialMensual = essentialMonthlyFromServices(data.services);
   const esencialPend = essentialPending(data.services, data.transactions);
@@ -52,8 +48,9 @@ export function renderDashboard() {
     deudaTDC,
     msiPendingTotal(data.installmentPurchases),
   );
-  const diasCorte = card_ ? daysUntilISO(ciclo.end) : null;
-  const diasLimite = card_ ? daysUntilISO(nextDueDate(card_.cutDay)) : null;
+  const proximoCorte = summaries
+    .filter((s) => s.dates.daysToCut !== null)
+    .sort((a, b) => a.dates.daysToCut - b.dates.daysToCut)[0];
   const spentMap = spentByCategory(data.transactions, mes);
   const excedidos = data.budgets
     .filter((b) => b.month === mes)
@@ -61,10 +58,17 @@ export function renderDashboard() {
     .filter(({ b, spent }) => spent > b.plannedAmount);
 
   const alerts = [];
-  if (respaldo > 0) alerts.push(alert(`Tienes ${money(respaldo)} gastados con TDC sin respaldar`, 'warning'));
+  if (respaldo > 0) alerts.push(alert(`Compras TDC del ciclo por pagar: ${money(respaldo)}`, 'info'));
   if (libre < 0) alerts.push(alert(`Tu dinero libre real es negativo (${money0(libre)})`, 'danger'));
-  if (diasCorte !== null && diasCorte >= 0 && diasCorte <= 7) alerts.push(alert(`Faltan ${diasCorte} días para el corte de la tarjeta`, 'info'));
-  if (diasLimite !== null && diasLimite >= 0 && diasLimite <= 10) alerts.push(alert(`Faltan ${diasLimite} días para la fecha límite de pago`, 'info'));
+  for (const s of summaries) {
+    const { daysToCut, daysToDue } = s.dates;
+    if (daysToCut >= 0 && daysToCut <= 7) {
+      alerts.push(alert(`${s.card.name}: corte ${daysToCut === 0 ? 'hoy' : `en ${daysToCut} días`}`, 'info'));
+    }
+    if (daysToDue >= 0 && daysToDue <= 10) {
+      alerts.push(alert(`${s.card.name}: límite de pago ${daysToDue === 0 ? 'hoy' : `en ${daysToDue} días`}`, 'warning'));
+    }
+  }
   if (emergencia && emergencia.targetAmount && emergencia.currentAmount < emergencia.targetAmount) {
     alerts.push(alert('Fondo de emergencia por debajo de la meta', 'warning'));
   }
@@ -97,8 +101,8 @@ export function renderDashboard() {
           kpi('Dinero protegido', money(protegido), { color: 'sky' }),
           kpi('Gasto del mes', money(gastoMes)),
           kpi('Deuda TDC', money(deudaTDC), { color: deudaTDC > 0 ? 'red' : 'emerald' }),
-          kpi('Próximo pago TDC', money(proximoPago), { sub: `MSI: ${money(msiMes)}/mes` }),
-          kpi('Respaldo TDC pendiente', money(respaldo), { color: respaldo > 0 ? 'amber' : 'emerald', sub: 'Compras del ciclo' }),
+          kpi('Pago del próximo corte', money(proximoPago), { sub: `MSI: ${money(msiMes)}/mes` }),
+          kpi('Compras TDC del ciclo', money(respaldo), { color: respaldo > 0 ? 'amber' : 'emerald', sub: proximoCorte ? `Corte ${proximoCorte.card.name}` : 'Sin corte configurado' }),
           kpi('Fondo de emergencia', money(emergencia?.currentAmount || 0), { sub: `Meta: ${money(emergencia?.targetAmount || 0)}` }),
           kpi('Patrimonio neto', money(patrimonio), { color: patrimonio >= 0 ? 'emerald' : 'red' }),
         ])}

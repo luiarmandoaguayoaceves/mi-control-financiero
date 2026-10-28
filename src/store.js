@@ -47,14 +47,18 @@ function persist(data) {
 export function emptyData() {
   return {
     version: APP_DATA_VERSION,
-    settings: { currency: 'MXN' },
+    settings: { currency: 'MXN', reminders: true },
     accounts: [
       { id: 'acc-nomina', name: 'Nómina BBVA', institution: 'BBVA', type: 'debit', balance: 0, active: true, notes: 'Ajusta tu saldo en Configuración' },
       { id: 'acc-efectivo', name: 'Efectivo', institution: '', type: 'cash', balance: 0, active: true },
-      { id: 'acc-tdc-azul', name: 'Tarjeta BBVA Azul', institution: 'BBVA', type: 'credit', balance: 0, creditLimit: 111700, availableCredit: 111700, active: true },
+      { id: 'acc-tdc-azul', name: 'Tarjeta BBVA Azul', institution: 'BBVA', type: 'credit', balance: 0, creditLimit: 111700, availableCredit: 111700, active: true, cardId: 'cc-azul' },
+      { id: 'acc-tdc-nu', name: 'Tarjeta Nu', institution: 'Nu', type: 'credit', balance: 0, creditLimit: 0, availableCredit: 0, active: true, cardId: 'cc-nu' },
+      { id: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', institution: 'Mercado Pago', type: 'credit', balance: 0, creditLimit: 0, availableCredit: 0, active: true, cardId: 'cc-mp' },
     ],
     creditCards: [
-      { id: 'cc-azul', name: 'Tarjeta BBVA Azul', bank: 'BBVA', creditLimit: 111700, currentBalance: 0, cutDay: 12, currentNoInterestPayment: 0, availableCredit: 111700, points: 0, active: true },
+      { id: 'cc-azul', accountId: 'acc-tdc-azul', name: 'Tarjeta BBVA Azul', bank: 'BBVA', creditLimit: 111700, currentBalance: 0, cutDay: 12, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 111700, points: 0, active: true },
+      { id: 'cc-nu', accountId: 'acc-tdc-nu', name: 'Tarjeta Nu', bank: 'Nu', creditLimit: 0, currentBalance: 0, cutDay: null, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 0, points: 0, active: true },
+      { id: 'cc-mp', accountId: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', bank: 'Mercado Pago', creditLimit: 0, currentBalance: 0, cutDay: null, paymentDueDay: null, currentNoInterestPayment: 0, availableCredit: 0, points: 0, active: true },
     ],
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     funds: [
@@ -77,6 +81,94 @@ export function emptyData() {
 }
 
 /**
+ * Tarjetas que se agregan a los datos existentes (una sola vez) cuando la app
+ * se actualiza: Nu y Mercado Pago. Nacen en $0 y SIN día de corte, para que
+ * tú pongas tus fechas reales; mientras no las pongas, la app no inventa
+ * fechas ni pagos.
+ */
+export const SEED_CARDS = [
+  { cardId: 'cc-nu', accountId: 'acc-tdc-nu', name: 'Tarjeta Nu', bank: 'Nu' },
+  { cardId: 'cc-mp', accountId: 'acc-tdc-mp', name: 'Tarjeta Mercado Pago', bank: 'Mercado Pago' },
+];
+
+/**
+ * Migración suave e idempotente: se ejecuta al cargar y al importar un
+ * respaldo. Nunca cambia saldos ni movimientos: solo enlaza tarjeta↔cuenta,
+ * completa campos nuevos y agrega las tarjetas Nu / Mercado Pago si faltan.
+ */
+export function normalizeData(input) {
+  const data = { ...input };
+  data.settings = { currency: 'MXN', reminders: true, ...(data.settings || {}) };
+  data.accounts = (data.accounts || []).map((a) => ({ ...a }));
+  data.creditCards = (data.creditCards || []).map((c) => ({ ...c }));
+
+  // Enlaza por accountId o, en datos viejos, por nombre.
+  for (const card of data.creditCards) {
+    const acc =
+      data.accounts.find((a) => a.id === card.accountId) ||
+      data.accounts.find((a) => a.type === 'credit' && a.name === card.name);
+    if (acc) {
+      card.accountId = acc.id;
+      acc.cardId = card.id;
+    }
+  }
+
+  // Una cuenta de crédito sin tarjeta (datos viejos) recibe su tarjeta.
+  for (const acc of data.accounts.filter((a) => a.type === 'credit' && !a.cardId)) {
+    const card = {
+      id: `cc-${acc.id.replace(/^acc-/, '')}`,
+      accountId: acc.id,
+      name: acc.name,
+      bank: acc.institution || '',
+      creditLimit: acc.creditLimit || 0,
+      currentBalance: 0,
+      cutDay: null,
+      paymentDueDay: null,
+      currentNoInterestPayment: 0,
+      availableCredit: acc.availableCredit || 0,
+      points: 0,
+      active: true,
+    };
+    data.creditCards.push(card);
+    acc.cardId = card.id;
+  }
+
+  // Nu y Mercado Pago: se agregan si no existen (no tocan saldos).
+  for (const seed of SEED_CARDS) {
+    if (data.creditCards.some((c) => c.id === seed.cardId || c.name === seed.name)) continue;
+    data.creditCards.push({
+      id: seed.cardId,
+      accountId: seed.accountId,
+      name: seed.name,
+      bank: seed.bank,
+      creditLimit: 0,
+      currentBalance: 0,
+      cutDay: null,
+      paymentDueDay: null,
+      currentNoInterestPayment: 0,
+      availableCredit: 0,
+      points: 0,
+      active: true,
+    });
+    if (!data.accounts.some((a) => a.id === seed.accountId)) {
+      data.accounts.push({
+        id: seed.accountId,
+        name: seed.name,
+        institution: seed.bank,
+        type: 'credit',
+        balance: 0,
+        creditLimit: 0,
+        availableCredit: 0,
+        active: true,
+        cardId: seed.cardId,
+      });
+    }
+  }
+
+  return data;
+}
+
+/**
  * Carga síncrona: tus datos de localStorage o, si nunca has guardado nada
  * en ESTE navegador, un estado vacío (sin datos semilla).
  */
@@ -85,7 +177,7 @@ export function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      cache = JSON.parse(raw);
+      cache = normalizeData(JSON.parse(raw));
       return cache;
     }
   } catch (e) {
@@ -104,10 +196,17 @@ function get() {
 function cardForAccount(data, accountId) {
   const acc = data.accounts.find((a) => a.id === accountId);
   if (!acc) return undefined;
-  return (
-    data.creditCards.find((c) => c.name === acc.name) ||
-    data.creditCards.find((c) => c.active)
-  );
+  if (acc.cardId) return data.creditCards.find((c) => c.id === acc.cardId);
+  return data.creditCards.find((c) => c.name === acc.name);
+}
+
+/** Busca la tarjeta de un movimiento: la elegida explícitamente o la de su cuenta. */
+function cardForTx(data, tx) {
+  if (tx.cardId) {
+    const direct = data.creditCards.find((c) => c.id === tx.cardId);
+    if (direct) return direct;
+  }
+  return cardForAccount(data, tx.accountId);
 }
 
 /** Aplica el efecto contable de una transacción. sign: +1 aplicar, -1 revertir. */
@@ -122,8 +221,8 @@ export function applyTransactionToData(data, tx, sign) {
     const a = accounts.find((x) => x.id === id);
     if (a) a.balance = round2(a.balance + delta);
   };
-  const bumpCard = (delta) => {
-    const card = cardForAccount(data, tx.accountId);
+  const bumpCard = (delta, cardId) => {
+    const card = (cardId && cards.find((x) => x.id === cardId)) || cardForTx(data, tx);
     if (card) {
       const c = cards.find((x) => x.id === card.id);
       if (c) c.currentBalance = round2(Math.max(0, c.currentBalance + delta));
@@ -156,7 +255,7 @@ export function applyTransactionToData(data, tx, sign) {
       break;
     case 'creditPayment':
       if (acc && acc.type !== 'credit') bumpAccount(tx.accountId, -tx.amount * s);
-      bumpCard(-tx.amount * s);
+      bumpCard(-tx.amount * s, tx.cardId);
       break;
   }
 
@@ -299,6 +398,72 @@ export function removeFund(id) {
   persist({ ...next, funds: next.funds.filter((f) => f.id !== id) });
 }
 
+/**
+ * Crea una tarjeta de crédito con su cuenta asociada (en $0). El día de corte
+ * y el día límite de pago son opcionales: si no vienen, la app no inventa
+ * fechas y la pantalla los pide.
+ */
+export function addCard({ name, bank = '', creditLimit = 0, cutDay = null, paymentDueDay = null } = {}) {
+  const data = get();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanName) return null;
+  const day = (v) => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 1 && n <= 28 ? n : null;
+  };
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const cardId = `cc-${suffix}`;
+  const accountId = `acc-${suffix}`;
+  const limit = round2(Number(creditLimit) || 0);
+  const card = {
+    id: cardId,
+    accountId,
+    name: cleanName,
+    bank: String(bank ?? '').trim(),
+    creditLimit: limit,
+    currentBalance: 0,
+    cutDay: day(cutDay),
+    paymentDueDay: day(paymentDueDay),
+    currentNoInterestPayment: 0,
+    availableCredit: limit,
+    points: 0,
+    active: true,
+  };
+  const account = {
+    id: accountId,
+    name: cleanName,
+    institution: card.bank,
+    type: 'credit',
+    balance: 0,
+    creditLimit: limit,
+    availableCredit: limit,
+    active: true,
+    cardId,
+  };
+  persist({ ...data, accounts: [...data.accounts, account], creditCards: [...data.creditCards, card] });
+  return card;
+}
+
+/**
+ * Borra una tarjeta junto con su cuenta. Solo si está en $0 y no tiene
+ * movimientos: si hay deuda o historial se rechaza (borrarlo falsearía saldos).
+ */
+export function removeCard(cardId) {
+  const data = get();
+  const card = data.creditCards.find((c) => c.id === cardId);
+  if (!card) return { ok: false, reason: 'No encontrada' };
+  if (card.currentBalance > 0) return { ok: false, reason: 'Tiene saldo pendiente' };
+  const account = data.accounts.find((a) => a.id === card.accountId || a.cardId === card.id);
+  const used = data.transactions.some((t) => t.cardId === card.id || (account && t.accountId === account.id));
+  if (used) return { ok: false, reason: 'Tiene movimientos registrados' };
+  persist({
+    ...data,
+    creditCards: data.creditCards.filter((c) => c.id !== card.id),
+    accounts: data.accounts.filter((a) => a.id !== card?.accountId),
+  });
+  return { ok: true };
+}
+
 export function updateCollection(collection, item) {
   const data = get();
   const exists = data[collection].some((x) => x.id === item.id);
@@ -326,7 +491,7 @@ export function importJSON(json) {
   if (!data || !Array.isArray(data.transactions)) {
     throw new Error('El archivo no parece un respaldo válido de Mi Control Financiero');
   }
-  const cleaned = { ...data, version: APP_DATA_VERSION };
+  const cleaned = normalizeData({ ...data, version: APP_DATA_VERSION });
   persist(cleaned);
   return cleaned;
 }

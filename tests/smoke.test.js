@@ -57,7 +57,7 @@ function makeFixture() {
 
 mem.set('mcf_app_data_v1', JSON.stringify(makeFixture()));
 
-const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, addFund, removeFund, updateCollection, removeFromCollection } = await import('../src/store.js');
+const { load, emptyData, addTransaction, deleteTransaction, getData, fundMovement, addFund, removeFund, updateCollection, removeFromCollection, normalizeData, addCard, removeCard } = await import('../src/store.js');
 const { store } = await import('../src/screens/appState.js');
 store.data = load();
 
@@ -84,7 +84,10 @@ test('arranque vacío: la app NO tiene datos semilla', () => {
   assert.equal(empty.budgets.length, 0);
   assert.equal(empty.assets.length, 0);
   assert.equal(empty.snapshots.length, 0);
-  assert.equal(empty.accounts.length, 3, 'solo estructura de cuentas');
+  assert.equal(empty.accounts.length, 5, 'estructura: 2 de débito/efectivo + 3 tarjetas');
+  assert.equal(empty.creditCards.length, 3, 'BBVA Azul, Nu y Mercado Pago');
+  assert.ok(empty.creditCards.some((c) => /Nu/.test(c.name)), 'tarjeta Nu disponible');
+  assert.ok(empty.creditCards.some((c) => /Mercado Pago/.test(c.name)), 'tarjeta Mercado Pago disponible');
   assert.ok(empty.accounts.every((a) => a.balance === 0), 'cuentas en $0');
   assert.equal(empty.categories.length, 23, 'categorías por defecto (la app las necesita)');
   assert.ok(empty.funds.every((f) => f.currentAmount === 0), 'apartados en $0');
@@ -152,7 +155,7 @@ test('dashboard renderiza saldo, dinero libre y alerta de respaldo TDC', () => {
   const html = renderDashboard();
   assert.ok(html.includes('$12,074.73'), 'saldo de la cuenta');
   assert.ok(html.includes('Dinero libre real'), 'dinero libre');
-  assert.ok(html.includes('TDC sin respaldar'), 'alerta de respaldo pendiente');
+  assert.ok(html.includes('Compras TDC del ciclo'), 'resumen de compras TDC del ciclo');
   assert.ok(html.includes('$399.00'), 'pago proyectado = respaldo 399 + MSI 0');
   assert.ok(html.includes('$6,500.00'), 'total apartados del fixture');
 });
@@ -163,7 +166,7 @@ test('tarjeta muestra línea, saldo y estado vacío de MSI', () => {
   assert.ok(html.includes('$20,000.50'), 'saldo utilizado');
   assert.ok(html.includes('$0.00'), 'MSI mensuales en cero');
   assert.ok(html.includes('Sin compras MSI activas'), 'sin MSI registrados');
-  assert.ok(html.includes('MSI futuros'), 'nota: el saldo no es el pago requerido');
+  assert.ok(html.includes('no se pagan completas en el corte'), 'nota: MSI no se paga completo en el corte');
 });
 
 test('MSI: Tarjeta ofrece botón para agregar compras aunque la lista esté vacía', () => {
@@ -354,4 +357,53 @@ test('modal de ayuda de instalación renderiza las instrucciones', () => {
   assert.ok(html.includes('Agregar a pantalla de inicio'));
   assert.ok(html.includes('Entendido'));
   state.modal = null;
+});
+
+
+// ---------- Tarjetas: Nu, Mercado Pago y fechas de corte ----------
+
+test('normalizeData agrega Nu y Mercado Pago una sola vez y sin tocar saldos', () => {
+  const base = emptyData();
+  base.accounts[0].balance = 12074.73;
+  base.creditCards[0].currentBalance = 20000.5;
+  const once = normalizeData(base);
+  const twice = normalizeData(once);
+  assert.equal(twice.creditCards.length, once.creditCards.length, 'idempotente');
+  assert.equal(twice.creditCards.filter((c) => /Nu|Mercado Pago/.test(c.name)).length, 2);
+  assert.equal(twice.accounts.find((a) => a.id === 'acc-nomina').balance, 12074.73, 'saldo intacto');
+  assert.equal(twice.creditCards.find((c) => c.id === 'cc-azul').currentBalance, 20000.5, 'deuda intacta');
+  const nu = twice.creditCards.find((c) => /Nu/.test(c.name));
+  assert.equal(nu.cutDay, null, 'sin inventar fecha de corte');
+  assert.equal(twice.accounts.find((a) => a.id === nu.accountId).cardId, nu.id, 'cuenta enlazada');
+});
+
+test('cada tarjeta tiene su cuenta de crédito y se puede dar de baja solo si está limpia', () => {
+  const created = addCard({ name: 'Tarjeta de prueba', bank: 'Test', creditLimit: 5000, cutDay: 5, paymentDueDay: 25 });
+  assert.ok(created?.id, 'tarjeta creada');
+  assert.equal(created.cutDay, 5);
+  assert.equal(created.paymentDueDay, 25);
+  // Con deuda la baja se rechaza (no puede falsear saldos)
+  updateCollection('creditCards', { ...created, currentBalance: 100 });
+  assert.equal(removeCard(created.id).ok, false, 'no se borra con saldo');
+  updateCollection('creditCards', { ...created, currentBalance: 0 });
+  assert.equal(removeCard(created.id).ok, true, 'en $0 y sin movimientos sí se borra');
+});
+
+test('modal de movimiento: categorías con buscador, sin pendiente ni respaldo TDC', () => {
+  state.modal = { kind: 'newTx', form: null };
+  const html = renderModal();
+  assert.ok(html.includes('data-ss-filter'), 'buscador de categorías');
+  assert.ok(html.includes('data-action="tx-category"'), 'opciones de categoría');
+  assert.ok(!html.includes('tx-pending'), 'ya no existe el interruptor Pendiente');
+  assert.ok(!html.includes('respaldo TDC'), 'ya no se habla de respaldo TDC en el formulario');
+  assert.ok(html.includes('Compra con tarjeta de crédito'), 'switch de compra TDC');
+  state.modal = null;
+});
+
+test('tarjeta: selector de tarjetas y fechas de corte y límite de pago', () => {
+  const html = renderCard();
+  assert.ok(html.includes('data-action="card-select"'), 'selector de tarjeta');
+  assert.ok(html.includes('Fecha de corte'), 'fecha de corte visible');
+  assert.ok(html.includes('Límite de pago'), 'fecha límite de pago visible');
+  assert.ok(html.includes('data-action="card-add"'), 'botón para agregar tarjeta');
 });

@@ -93,8 +93,20 @@ test('currentCycleRange cambia de ciclo después del día de corte', () => {
 test('nextCutDate y nextDueDate calculan fechas futuras de corte y límite', () => {
   const now = new Date(2026, 7, 31); // 31 ago 2026
   assert.equal(nextCutDate(12, now), '2026-09-12');
-  // Límite de pago: día 1 del mes siguiente al corte (patrón BBVA Azul)
-  assert.equal(nextDueDate(12, now), '2026-10-01');
+  // Sin día de pago configurado: día 1 del mes siguiente al corte (BBVA Azul)
+  assert.equal(nextDueDate(12, null, now), '2026-10-01');
+  // Con día de pago propio de la tarjeta (Nu/Mercado Pago)
+  assert.equal(nextDueDate(5, 25, new Date(2026, 7, 31)), '2026-09-25');
+  assert.equal(nextDueDate(12, 2, new Date(2026, 7, 31)), '2026-10-02');
+});
+
+test('las compras a MSI no se pagan completas en el corte', () => {
+  const cycle = { start: '2026-08-12', end: '2026-09-12' };
+  const txs = [
+    { accountId: 'a1', type: 'expense', isCreditCardPurchase: true, amount: 1000, date: '2026-08-20' },
+    { accountId: 'a1', type: 'expense', isCreditCardPurchase: true, isMsi: true, amount: 12000, date: '2026-08-21' },
+  ];
+  assert.equal(tdcBackingNeeded(txs, ['a1'], cycle), 1000);
 });
 
 // ---------- Respaldo TDC ----------

@@ -125,6 +125,60 @@ export function chipRow(chips) {
   return `<div class="flex flex-wrap gap-2">${chips.join('')}</div>`;
 }
 
+/**
+ * Fila con interruptor (on/off) reutilizable. `action` recibe data-payload.
+ */
+export function switchRow({ label, sub = '', action, on = false, payload = '' }) {
+  return `
+    <button data-action="${action}" ${payload ? `data-payload="${esc(payload)}"` : ''}
+      class="w-full mt-3 flex items-center justify-between gap-3 bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-3 min-h-12 text-left active:scale-[0.99]">
+      <span class="min-w-0">
+        <span class="block text-sm font-semibold text-slate-900 dark:text-slate-100">${esc(label)}</span>
+        ${sub ? `<span class="block text-[11px] text-slate-500 dark:text-slate-400">${esc(sub)}</span>` : ''}
+      </span>
+      <span class="shrink-0 w-11 h-6 rounded-full p-0.5 ${on ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}">
+        <span class="block w-5 h-5 bg-white rounded-full transition ${on ? 'ml-auto' : ''}"></span>
+      </span>
+    </button>
+  `;
+}
+
+/**
+ * Selector con buscador (estilo select2) para listas largas como categorías.
+ * Filtra en el DOM (data-ss-filter en app.js) para no re-renderizar y no
+ * perder el foco del teclado mientras escribes.
+ */
+export function searchSelect({ id, options, value = '', action, placeholder = 'Buscar…', emptyText = 'Sin resultados' }) {
+  const selected = options.find((o) => o.id === value);
+  const list = options
+    .map((o) => `
+      <button type="button" data-action="${action}" data-payload="${esc(o.id)}" data-ss-option
+        class="ss-option w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg ${
+          o.id === value
+            ? 'bg-indigo-600 text-white'
+            : 'text-slate-700 dark:text-slate-200 active:bg-slate-100 dark:active:bg-slate-800'
+        }">
+        ${esc(o.name)}${o.group && o.group !== 'Ingreso' ? `<span class="block text-[10px] font-normal ${o.id === value ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}">${esc(o.group)}</span>` : ''}
+      </button>
+    `)
+    .join('');
+  return `
+    <div class="mt-1">
+      <div class="relative">
+        <input id="${id}-search" data-ss-filter="${id}-list" type="search" autocomplete="off" placeholder="${esc(placeholder)}"
+          class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl pl-9 pr-3 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500" />
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+      </div>
+      <div id="${id}-list" class="mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 dark:border-slate-700 p-1 flex flex-col gap-0.5">
+        ${list || `<div class="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">${esc(emptyText)}</div>`}
+      </div>
+      <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+        Seleccionada: <span class="font-semibold text-slate-700 dark:text-slate-200">${esc(selected?.name || '—')}</span>
+      </div>
+    </div>
+  `;
+}
+
 export function alert(message, tone = 'warning') {
   const tones = {
     warning: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400',

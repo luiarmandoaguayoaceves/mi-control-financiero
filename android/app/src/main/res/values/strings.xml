@@ -4,4 +4,5 @@
     <string name="title_activity_main">Mi Control Financiero</string>
     <string name="package_name">com.luisarmando.micontrolfinanciero</string>
     <string name="custom_url_scheme">com.luisarmando.micontrolfinanciero</string>
+    <string name="widget_name">Resumen financiero</string>
 </resources>
