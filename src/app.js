@@ -28,7 +28,24 @@ function applyTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.classList.toggle('dark', dark);
+  syncSystemBars(dark);
   return dark;
+}
+
+/**
+ * Dentro del APK la barra de estado se dibuja ENCIMA de la app (Android 15+
+ * la obliga a ir de borde a borde). Aquí se elige el color de sus iconos:
+ * tema claro = iconos oscuros, tema oscuro = iconos claros. En el navegador
+ * solo se actualiza el theme-color de la barra del sistema.
+ */
+function syncSystemBars(dark) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#0f172a' : '#ffffff');
+  try {
+    window.Capacitor?.Plugins?.SystemBars?.setStyle({ style: dark ? 'DARK' : 'LIGHT' });
+  } catch {
+    /* En el navegador no existe el plugin: no pasa nada. */
+  }
 }
 
 let isDark = applyTheme();
@@ -89,7 +106,7 @@ function pagerHtml() {
     <div id="pager" class="h-full flex touch-pan-y transition-transform duration-300 ease-out will-change-transform"
          style="transform: translateX(-${index * 100}%)">
       ${TAB_VIEWS.map((v) => `
-        <section data-panel="${v}" class="w-full h-full overflow-y-auto shrink-0 no-scrollbar">${viewHtmlFor(v)}</section>
+        <section data-panel="${v}" class="carrusel-panel w-full h-full overflow-y-auto overflow-x-hidden shrink-0 no-scrollbar">${viewHtmlFor(v)}</section>
       `).join('')}
     </div>
   `;
@@ -104,15 +121,15 @@ function navHtml() {
     { id: 'more', label: 'Más', icon: '📊' },
   ];
   return `
-    <nav class="bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-[env(safe-area-inset-top)] z-40 shadow-[0_2px_8px_rgba(15,23,42,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
+    <nav id="app-navbar" class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 z-40 shadow-[0_-2px_8px_rgba(15,23,42,0.06)] dark:shadow-[0_-2px_8px_rgba(0,0,0,0.4)]">
       <div class="grid grid-cols-5">
         ${tabs.map((t) => {
           const active = state.view === t.id;
           return `
             <button data-action="nav" data-payload="${t.id}" aria-label="${t.label}"
-              class="flex flex-col items-center gap-0.5 py-2 ${active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}">
-              <span class="text-lg leading-none">${t.icon}</span>
-              <span class="text-[10px] font-semibold">${t.label}</span>
+              class="flex flex-col items-center justify-center gap-0.5 min-h-14 pt-1.5 pb-1 ${active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}">
+              <span class="text-[19px] leading-none ${active ? 'scale-110' : ''} transition-transform">${t.icon}</span>
+              <span class="text-[10px] font-semibold leading-tight">${t.label}</span>
             </button>
           `;
         }).join('')}
@@ -134,15 +151,15 @@ function headerHtml() {
     : titles[state.view];
   const showBack = state.view === 'more' && state.moreView !== 'menu';
   return `
-    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-md mx-auto flex items-center justify-between px-4 py-2.5">
+    <header id="app-topbar" class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+      <div class="max-w-md mx-auto flex items-center justify-between gap-2 px-4 py-2">
         <div class="flex items-center gap-1 min-w-0">
           ${showBack ? `<button data-action="more-back" aria-label="Volver al menú Más" class="text-3xl font-bold text-slate-500 dark:text-slate-400 leading-none px-1 -ml-2 active:scale-90">‹</button>` : ''}
-          <h1 class="text-base font-extrabold text-slate-900 dark:text-slate-50 truncate">${title}</h1>
+          <h1 class="text-[17px] font-extrabold text-slate-900 dark:text-slate-50 truncate">${title}</h1>
         </div>
-        <div class="flex items-center gap-2">
-          ${state.view === 'dashboard' || state.view === 'movements' ? `<button data-action="new-tx" class="bg-indigo-600 text-white w-8 h-8 rounded-full text-xl font-bold leading-none active:scale-90">+</button>` : ''}
-          <button data-action="toggle-theme" aria-label="Cambiar tema" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-base">${isDark ? '☀️' : '🌙'}</button>
+        <div class="flex items-center gap-2 shrink-0">
+          ${state.view === 'dashboard' || state.view === 'movements' ? `<button data-action="new-tx" aria-label="Registrar movimiento" class="bg-indigo-600 text-white w-9 h-9 rounded-full text-xl font-bold leading-none active:scale-90">+</button>` : ''}
+          <button data-action="toggle-theme" aria-label="Cambiar tema" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-base active:scale-90">${isDark ? '☀️' : '🌙'}</button>
         </div>
       </div>
     </header>
@@ -152,7 +169,7 @@ function headerHtml() {
 function toastHtml() {
   if (!state.toast) return '';
   return `
-    <div class="fixed top-32 left-1/2 -translate-x-1/2 z-50 bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-lg max-w-[90%]">
+    <div id="app-toast" class="fixed left-1/2 -translate-x-1/2 z-50 bg-slate-900 dark:bg-slate-700 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-lg max-w-[90%]">
       ${state.toast}
     </div>
   `;
@@ -710,6 +727,7 @@ function handleAction(action, payload, el) {
     case 'toggle-theme':
       isDark = !isDark;
       document.documentElement.classList.toggle('dark', isDark);
+      syncSystemBars(isDark);
       localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
       render();
       break;

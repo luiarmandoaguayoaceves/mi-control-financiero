@@ -71,6 +71,24 @@ y queda instalada con su icono. Es un APK **debug** (firmado con la llave de dep
 sirve perfecto para uso personal; si algún día quieres publicarlo en Play Store hay que
 firmarlo con una llave propia (`assembleRelease` + keystore).
 
+### Diseño para celular (áreas seguras)
+
+Android 15+ obliga a dibujar de borde a borde, así que la app queda **debajo** de la barra de
+estado y de la barra de gestos. Se resuelve en tres capas:
+
+- `index.html` lleva `viewport-fit=cover`; el plugin **SystemBars** de Capacitor
+  (`capacitor.config.json` → `plugins.SystemBars.insetsHandling: "css"`) inyecta
+  `--safe-area-inset-*` en píxeles reales (incluye muesca).
+- `src/input.css` expone `--safe-top/-bottom/-left/-right` (con `env()` de respaldo) y las
+  aplica: `#app-topbar` (barra de estado), `#app-navbar` (barra de gestos), `#app-toast` y
+  `#modal-sheet` (hoja inferior que nunca queda tapada).
+- `src/app.js` → `syncSystemBars()` elige iconos claros u oscuros según el tema de la app
+  (no el del sistema) y actualiza `theme-color`; la actividad usa `adjustResize` para que el
+  teclado no tape los campos del modal.
+
+Regla al tocar la UI: **ningún** elemento fijo debe usar `env()` directo; usa las variables
+`--safe-*` para que funcione igual en el APK, en Chrome y en la PWA instalada.
+
 ### Actualizar el APK por WiFi (sin perder datos)
 
 El celular y la computadora en la misma red; no hace falta cable:
@@ -78,7 +96,7 @@ El celular y la computadora en la misma red; no hace falta cable:
 ```
 npm run android:apk
 mkdir -p /tmp/mcf-wifi && cp android/app/build/outputs/apk/debug/app-debug.apk \
-  /tmp/mcf-wifi/mi-control-financiero-1.1.apk
+  /tmp/mcf-wifi/mi-control-financiero-1.2.apk
 python3 -m http.server 8000 --directory /tmp/mcf-wifi   # queda sirviendo en la LAN
 ```
 
@@ -88,7 +106,7 @@ existente (misma `applicationId` y misma firma) Android la actualiza y **conserv
 `localStorage`**: movimientos, saldos y apartados siguen intactos. Reglas:
 
 - **No desinstales** la app antes de actualizar (desinstalar sí borra los datos).
-- Sube `versionCode` en `android/app/build.gradle` en cada entrega (hoy va en 2 / 1.1) para
+- Sube `versionCode` en `android/app/build.gradle` en cada entrega (hoy va en 3 / 1.2) para
   que el instalador la trate como actualización.
 - Si algún día cambia la llave de firma, Android rechaza la actualización; habría que
   exportar el respaldo JSON e importarlo en la instalación nueva.

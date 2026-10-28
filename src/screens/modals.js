@@ -7,7 +7,8 @@ import { CATEGORY_IDS, PAYMENT_METHODS, TRANSACTION_TYPE_LABELS } from '../model
 function modalShell(inner) {
   return `
     <div class="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center" data-action="modal-backdrop">
-      <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90dvh] overflow-y-auto pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+      <div id="modal-sheet" class="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-3xl sm:rounded-3xl px-5 pt-3 pb-5 overflow-y-auto overscroll-contain">
+        <div class="mx-auto w-10 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 mb-4"></div>
         ${inner}
       </div>
     </div>
